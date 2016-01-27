@@ -1,7 +1,7 @@
 PROJ = matrix_mul
 CC = g++
 
-CFLAGS = -c -g -Wall -I/opt/local/include -I$(HOME)/cppunit/include
+CFLAGS = -c -g -Wall -I/opt/local/include -I$(HOME)/cppunit/include -fopenmp
 LDFLAGS = -L/opt/local/lib -L$(HOME)/cppunit/lib
 LIBS = -lcppunit -ldl
 OBJS = $(patsubst %.cpp,%.o,$(wildcard *.cpp))
