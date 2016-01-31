@@ -93,7 +93,7 @@ float** omp_kmeans(int     is_perform_atomic, /* in: */
     int    **local_newClusterSize; /* [nthreads][numClusters] */
     float ***local_newClusters;    /* [nthreads][numClusters][numCoords] */
 
-    
+    // disable atomic 
     is_perform_atomic = 0;
     
     nthreads = omp_get_max_threads();
