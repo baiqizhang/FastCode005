@@ -19,40 +19,56 @@
 #include <omp.h>
 #include "matrix_mul.h"
 #include <stdlib.h>
+#include <stdio.h>
+#include <pmmintrin.h>
+
 
 namespace omp
 {
     void
     matrix_multiplication(float *sq_matrix_1, float *sq_matrix_2, float *sq_matrix_result, unsigned int sq_dimension )
     {
-//        omp_set_num_threads(8);
+        float *A, *B_t;
+        unsigned int n = sq_dimension, N;
         unsigned int i, j, k;
         
-#pragma omp parallel for
-        for (i = 0; i < sq_dimension; i++)
-            for(j = 0; j < sq_dimension; j++)
-                sq_matrix_result[i*sq_dimension + j] = 0;
+        // if n is not multiple of 4, create padding. N = n + 4 - (n&3). O(N^2)
+        if ((n & 3) != 0){
+            N = n - (n&3) + 4;
+            A = (float*)calloc(N*N, sizeof(float)); // filled with 0
+        } else {
+            N = n;
+            A = sq_matrix_1;
+        }
         
-        unsigned int N = sq_dimension, jj, kk, s = 128;
+        //transpose B
+        B_t = (float*)calloc(N*N, sizeof(double));
+        for (i = 0; i < n; i++)
+            for(j = 0; j < n; j++){
+                if (N != n) //not mul of 4, fill A
+                    A[i * N + j] = sq_matrix_1[i * n + j];
+                B_t[i * N + j] = sq_matrix_2[j * n + i];
+            }
         
-//# pragma omp parallel for \
-//  shared(sq_matrix_1,sq_matrix_2,sq_matrix_result) private(i,j,k,kk,jj) \
-//  schedule(static)
+        float temp[8], result;
+
 #pragma omp parallel for
-        for(kk = 0 ;kk < N; kk += s)
-            for(jj = 0;jj < N;jj += s)
-                for(i=0;i<N;i++)
-                    for(k = kk; k<((kk+s)>N?N:(kk+s)); k++)
-                        for(j = jj; j<((jj+s)>N?N:(jj+s)); j++)
-                            sq_matrix_result[i*sq_dimension+j] +=
-                                sq_matrix_1[i*sq_dimension+k]*sq_matrix_2[k*sq_dimension+j];
-
-//#pragma omp parallel for
-//        for (i = 0; i < sq_dimension; i++)
-//            for (k = 0; k < sq_dimension; k++)
-//                for(j = 0; j < sq_dimension; j++)
-//	                sq_matrix_result[i*sq_dimension + j] +=
-//                        sq_matrix_1[i*sq_dimension + k] * sq_matrix_2[k*sq_dimension + j];
-
+        for (i = 0; i < n; i++)
+            for (j = 0; j < n; j++) {
+                __m128 sum = _mm_setzero_ps();
+                
+                for (k = 0; k < n; k += 4) {
+                    sum = _mm_add_ps(sum, _mm_mul_ps(_mm_load_ps(&A[i * N + k]),
+                                                     _mm_load_ps(&B_t[j * N + k])));
+                }
+                _mm_store_ps(temp, sum);
+                result = temp[0] + temp[1] + temp[2] + temp[3];
+                sq_matrix_result[i*n + j] = result;
+            }
+        
+        //free
+        if (n != N)
+            free(A);
+        free(B_t);
     }
 }
