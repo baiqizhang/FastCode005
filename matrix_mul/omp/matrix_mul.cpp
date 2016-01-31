@@ -21,19 +21,21 @@
 
 namespace omp
 {
-  void
-  matrix_multiplication(float *sq_matrix_1, float *sq_matrix_2, float *sq_matrix_result, unsigned int sq_dimension )
-  {
+    void
+    matrix_multiplication(float *sq_matrix_1, float *sq_matrix_2, float *sq_matrix_result, unsigned int sq_dimension )
+    {
+        // Test Case 5	227.349 milliseconds
+        unsigned int i, j, k;
+        for (i = 0; i < sq_dimension; i++)
+            for(j = 0; j < sq_dimension; j++)
+                sq_matrix_result[i*sq_dimension + j] = 0;
+
 #pragma omp parallel for
-    for (unsigned int i = 0; i < sq_dimension; i++) 
-      {
-	for(unsigned int j = 0; j < sq_dimension; j++) 
-	  {       
-	    sq_matrix_result[i*sq_dimension + j] = 0;
-	    for (unsigned int k = 0; k < sq_dimension; k++)
-	      sq_matrix_result[i*sq_dimension + j] += sq_matrix_1[i*sq_dimension + k] * sq_matrix_2[k*sq_dimension + j];
-	  }
-      }// End of parallel region
-  }
-  
-} //namespace omp
+        for (i = 0; i < sq_dimension; i++)
+            for (k = 0; k < sq_dimension; k++)
+                for(j = 0; j < sq_dimension; j++)
+	                sq_matrix_result[i*sq_dimension + j] +=
+                        sq_matrix_1[i*sq_dimension + k] * sq_matrix_2[k*sq_dimension + j];
+
+    }
+}
