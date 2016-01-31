@@ -25,7 +25,7 @@ namespace omp
     void
     matrix_multiplication(float *sq_matrix_1, float *sq_matrix_2, float *sq_matrix_result, unsigned int sq_dimension )
     {
-        omp_set_num_threads(8);
+//        omp_set_num_threads(8);
         unsigned int i, j, k;
         
 #pragma omp parallel for
@@ -33,11 +33,11 @@ namespace omp
             for(j = 0; j < sq_dimension; j++)
                 sq_matrix_result[i*sq_dimension + j] = 0;
         
-        unsigned int N = sq_dimension, jj, kk, s = 128;
+//        unsigned int N = sq_dimension, jj, kk, s = 128;
         
-# pragma omp parallel for \
-  shared(sq_matrix_1,sq_matrix_2,sq_matrix_result) private(i,j,k,kk,jj) \
-  schedule(static)
+//# pragma omp parallel for \
+//  shared(sq_matrix_1,sq_matrix_2,sq_matrix_result) private(i,j,k,kk,jj) \
+//  schedule(static)
 //        for(kk = 0 ;kk < N; kk += s)
 //            for(jj = 0;jj < N;jj += s)
 //                for(i=0;i<N;i++)
@@ -45,7 +45,7 @@ namespace omp
 //                        for(j = jj; j<((jj+s)>N?N:(jj+s)); j++)
 //                            sq_matrix_result[i*sq_dimension+j] +=
 //                                sq_matrix_1[i*sq_dimension+k]*sq_matrix_2[k*sq_dimension+j];
-//#pragma omp parallel for
+#pragma omp parallel for
         for (i = 0; i < sq_dimension; i++)
             for (k = 0; k < sq_dimension; k++)
                 for(j = 0; j < sq_dimension; j++)
