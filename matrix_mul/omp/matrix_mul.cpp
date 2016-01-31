@@ -33,7 +33,7 @@ namespace omp
             for(j = 0; j < sq_dimension; j++)
                 sq_matrix_result[i*sq_dimension + j] = 0;
         
-        unsigned int N = sq_dimension, jj, kk, s = 128;
+        unsigned int N = sq_dimension, jj, kk, s = 125;
         
 # pragma omp parallel for \
   shared(sq_matrix_1,sq_matrix_2,sq_matrix_result) private(i,j,k,kk,jj) \
