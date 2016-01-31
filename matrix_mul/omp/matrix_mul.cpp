@@ -28,6 +28,7 @@ namespace omp
     void
     matrix_multiplication(float *sq_matrix_1, float *sq_matrix_2, float *sq_matrix_result, unsigned int sq_dimension )
     {
+        //Test Case 5	76.3589 milliseconds
         float *A, *B_t;
         unsigned int n = sq_dimension, N;
         unsigned int i, j, k;
@@ -35,7 +36,7 @@ namespace omp
         // if n is not multiple of 4, create padding. N = n + 4 - (n&3). O(N^2)
         if ((n & 3) != 0){
             N = n - (n&3) + 4;
-            A = (float*)calloc(N*N, sizeof(float)); // filled with 0
+            A = (float*)calloc(N*N, sizeof(double)); // filled with 0
         } else {
             N = n;
             A = sq_matrix_1;
