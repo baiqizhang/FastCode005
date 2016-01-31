@@ -47,15 +47,19 @@ int find_nearest_cluster(int     numClusters, /* no. clusters */
                          float  *object,      /* [numCoords] */
                          float **clusters)    /* [numClusters][numCoords] */
 {
-    int   index, i;
+    int   index, i, j;
     float dist, min_dist;
 
     /* find the cluster id that has min distance to object */
     index    = 0;
-    min_dist = euclid_dist_2(numCoords, object, clusters[0]);
+    min_dist = 0;//euclid_dist_2(numCoords, object, clusters[0]);
+    for (j=0; j<numCoords; j++)
+        min_dist += (object[j]-clusters[0][j]) * (object[j]-clusters[0][j]);
 
     for (i=1; i<numClusters; i++) {
-        dist = euclid_dist_2(numCoords, object, clusters[i]);
+        dist = 0;//euclid_dist_2(numCoords, object, clusters[i]);
+        for (j=0; j<numCoords; j++)
+            dist += (object[j]-clusters[i][j]) * (object[j]-clusters[i][j]);
         /* no need square root */
         if (dist < min_dist) { /* find the min and its array index */
             min_dist = dist;
@@ -89,6 +93,9 @@ float** omp_kmeans(int     is_perform_atomic, /* in: */
     int    **local_newClusterSize; /* [nthreads][numClusters] */
     float ***local_newClusters;    /* [nthreads][numClusters][numCoords] */
 
+    
+    is_perform_atomic = 0;
+    
     nthreads = omp_get_max_threads();
 
     /* allocate a 2D space for returning variable clusters[] (coordinates
@@ -188,6 +195,7 @@ float** omp_kmeans(int     is_perform_atomic, /* in: */
                             firstprivate(numObjs,numClusters,numCoords) \
                             schedule(static) \
                             reduction(+:delta)
+                //firstprivate: Listed variables are initialized according to the value of their original objects prior to entry into the parallel or work-sharing construct.
                 for (i=0; i<numObjs; i++) {
                     /* find the array index of nestest cluster center */
                     index = find_nearest_cluster(numClusters, numCoords,
