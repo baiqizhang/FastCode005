@@ -36,14 +36,14 @@ namespace omp
         // if n is not multiple of 4, create padding. N = n + 4 - (n&3). O(N^2)
         if ((n & 3) != 0){
             N = n - (n&3) + 4;
-            A = (float*)calloc(N*N, sizeof(double)); // filled with 0
+            A = (float*)calloc(N*N, sizeof(float)); // filled with 0
         } else {
             N = n;
             A = sq_matrix_1;
         }
         
         //transpose B
-        B_t = (float*)calloc(N*N, sizeof(double));
+        B_t = (float*)calloc(N*N, sizeof(float));
         for (i = 0; i < n; i++)
             for(j = 0; j < n; j++){
                 if (N != n) //not mul of 4, fill A
@@ -53,7 +53,9 @@ namespace omp
         
         float temp[8], result;
 
-#pragma omp parallel for
+#pragma omp parallel for \
+    private(i,j,temp,result) \
+    shared(sq_matrix_result,A,B_t)
         for (i = 0; i < n; i++)
             for (j = 0; j < n; j++) {
                 __m128 sum = _mm_setzero_ps();
