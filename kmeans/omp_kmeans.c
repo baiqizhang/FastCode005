@@ -158,7 +158,7 @@ float** omp_kmeans(int     is_perform_atomic, /* in: */
     if (_debug) timing = omp_get_wtime();
     do {
         delta = 0.0;
-        int deltas[16];
+        int deltas[16]={0};
         
         if (is_perform_atomic) {
 #pragma omp parallel for \
