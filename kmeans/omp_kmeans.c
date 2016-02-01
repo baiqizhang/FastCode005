@@ -41,7 +41,7 @@ float euclid_dist_2(int    numdims,  /* no. dimensions */
 }
 
 /*----< find_nearest_cluster() >---------------------------------------------*/
- static
+__inline static
 int find_nearest_cluster(int     numClusters, /* no. clusters */
                          int     numCoords,   /* no. coordinates */
                          float  *object,      /* [numCoords] */
@@ -80,8 +80,7 @@ float** omp_kmeans(int     is_perform_atomic, /* in: */
                    float   threshold,         /* % objects change membership */
                    int    *membership)        /* out: [numObjs] */
 {
-    omp_set_num_threads(6);
-
+    
     int      i, j, k, index, loop=0;
     int     *newClusterSize; /* [numClusters]: no. objects assigned in each
                               new cluster */
@@ -102,7 +101,9 @@ float** omp_kmeans(int     is_perform_atomic, /* in: */
     /* allocate a 2D space for returning variable clusters[] (coordinates
      of cluster centers) */
     clusters    = (float**) malloc(numClusters *             sizeof(float*));
+    assert(clusters != NULL);
     clusters[0] = (float*)  malloc(numClusters * numCoords * sizeof(float));
+    assert(clusters[0] != NULL);
     for (i=1; i<numClusters; i++)
         clusters[i] = clusters[i-1] + numCoords;
     
