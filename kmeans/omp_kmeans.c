@@ -188,12 +188,13 @@ reduction(+:delta)
         }
         else {
 #pragma omp parallel \
-shared(objects,clusters,membership,local_newClusters,local_newClusterSize,numObjs,numClusters,numCoords)
+shared(objects,clusters,membership,local_newClusters,local_newClusterSize)
             {
                 int tid = omp_get_thread_num();
                 
 #pragma omp for \
 private(i,j,index) \
+firstprivate(numObjs,numClusters,numCoords) \
 schedule(static)
                 //firstprivate: Listed variables are initialized according to the value of their original objects prior to entry into the parallel or work-sharing construct.
                 for (i=0; i<numObjs; i++) {
