@@ -41,7 +41,7 @@ float euclid_dist_2(int    numdims,  /* no. dimensions */
 }
 
 /*----< find_nearest_cluster() >---------------------------------------------*/
-__inline static
+ static
 int find_nearest_cluster(int     numClusters, /* no. clusters */
                          int     numCoords,   /* no. coordinates */
                          float  *object,      /* [numCoords] */
@@ -80,7 +80,8 @@ float** omp_kmeans(int     is_perform_atomic, /* in: */
                    float   threshold,         /* % objects change membership */
                    int    *membership)        /* out: [numObjs] */
 {
-    
+    omp_set_num_threads(6);
+
     int      i, j, k, index, loop=0;
     int     *newClusterSize; /* [numClusters]: no. objects assigned in each
                               new cluster */
@@ -101,9 +102,7 @@ float** omp_kmeans(int     is_perform_atomic, /* in: */
     /* allocate a 2D space for returning variable clusters[] (coordinates
      of cluster centers) */
     clusters    = (float**) malloc(numClusters *             sizeof(float*));
-    assert(clusters != NULL);
     clusters[0] = (float*)  malloc(numClusters * numCoords * sizeof(float));
-    assert(clusters[0] != NULL);
     for (i=1; i<numClusters; i++)
         clusters[i] = clusters[i-1] + numCoords;
     
@@ -158,7 +157,6 @@ float** omp_kmeans(int     is_perform_atomic, /* in: */
     if (_debug) timing = omp_get_wtime();
     do {
         delta = 0.0;
-        int deltas[16]={0};
         
         if (is_perform_atomic) {
 #pragma omp parallel for \
@@ -191,11 +189,11 @@ reduction(+:delta)
 shared(objects,clusters,membership,local_newClusters,local_newClusterSize)
             {
                 int tid = omp_get_thread_num();
-                
 #pragma omp for \
 private(i,j,index) \
 firstprivate(numObjs,numClusters,numCoords) \
-schedule(static)
+schedule(static) \
+reduction(+:delta)
                 //firstprivate: Listed variables are initialized according to the value of their original objects prior to entry into the parallel or work-sharing construct.
                 for (i=0; i<numObjs; i++) {
                     /* find the array index of nestest cluster center */
@@ -203,7 +201,7 @@ schedule(static)
                                                  objects[i], clusters);
                     
                     /* if membership changes, increase delta by 1 */
-                    if (membership[i] != index) deltas[tid] += 1.0;
+                    if (membership[i] != index) delta += 1.0;
                     
                     /* assign the membership to object i */
                     membership[i] = index;
@@ -215,8 +213,6 @@ schedule(static)
                         local_newClusters[tid][index][j] += objects[i][j];
                 }
             } /* end of #pragma omp parallel */
-            for (j=0; j<nthreads; j++)
-                delta+=deltas[j];
             
             /* let the main thread perform the array reduction */
             for (i=0; i<numClusters; i++) {
