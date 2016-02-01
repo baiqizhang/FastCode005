@@ -63,9 +63,9 @@ namespace omp
         
         
 #pragma omp parallel for \
-private(i,j,k,ind,sum,t,temp,result) \
-shared(sq_matrix_result,A,B_t) \
-schedule(static)
+        private(i,j,k,ind,sum,t,temp,result) \
+        schedule(static)
+//shared(sq_matrix_result,A,B_t) \
         for (i = 0; i < n; i++){
             // pre-load A
             for (k = 0, ind = 0; k < n; k += 4, ind ++) {
