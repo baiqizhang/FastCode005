@@ -1,25 +1,26 @@
 /*
-
-    Copyright (C) 2011  Abhinav Jauhri (abhinav.jauhri@gmail.com), Carnegie Mellon University - Silicon Valley 
-
-    This program is free software: you can redistribute it and/or modify
-    it under the terms of the GNU General Public License as published by
-    the Free Software Foundation, either version 3 of the License, or
-    (at your option) any later version.
-
-    This program is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-    GNU General Public License for more details.
-
-    You should have received a copy of the GNU General Public License
-    along with this program.  If not, see <http://www.gnu.org/licenses/>.
-*/
+ 
+ Copyright (C) 2011  Abhinav Jauhri (abhinav.jauhri@gmail.com), Carnegie Mellon University - Silicon Valley
+ 
+ This program is free software: you can redistribute it and/or modify
+ it under the terms of the GNU General Public License as published by
+ the Free Software Foundation, either version 3 of the License, or
+ (at your option) any later version.
+ 
+ This program is distributed in the hope that it will be useful,
+ but WITHOUT ANY WARRANTY; without even the implied warranty of
+ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ GNU General Public License for more details.
+ 
+ You should have received a copy of the GNU General Public License
+ along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ */
 
 #include <omp.h>
 #include "matrix_mul.h"
 #include <stdlib.h>
 #include <stdio.h>
+#include <immintrin.h>
 #include <pmmintrin.h>
 
 
@@ -33,6 +34,7 @@ namespace omp
         unsigned int n = sq_dimension, N;
         unsigned int i, j, k;
         
+        
         // if n is not multiple of 4, create padding. N = n + 4 - (n&3). O(N^2)
         if ((n & 3) != 0){
             N = n - (n&3) + 4;
@@ -44,6 +46,8 @@ namespace omp
         
         //transpose B
         B_t = (float*)calloc(N*N, sizeof(float));
+#pragma omp parallel for \ 
+        shared(A,B_t,sq_matrix_1,sq_matrix_2)
         for (i = 0; i < n; i++)
             for(j = 0; j < n; j++){
                 if (N != n) //n is not mul of 4, fill A
@@ -51,27 +55,42 @@ namespace omp
                 B_t[i * N + j] = sq_matrix_2[j * n + i];
             }
         
+        // Matrix Mul
         float temp[8], result;
+        __m128 t[250];
+        __m128 preload_B[1000][250];
+        __m128 sum;
+        unsigned int ind;
+        
+        // pre-load for B
+        for (i = 0; i < n; i++)
+            for (ind = 0,k = 0; k < n; k += 4,ind++){
+                preload_B[i][ind] = _mm_load_ps(&B_t[i * N + k]);
+            }
+
 
 #pragma omp parallel for \
-    private(i,j,temp,result) \
-    shared(sq_matrix_result,A,B_t)
-        for (i = 0; i < n; i++)
+    private(i,j,k,ind,sum,t,temp,result) \
+    shared(sq_matrix_result,preload_B,A,B_t) \
+    schedule(static)
+        for (i = 0; i < n; i++){
+            for (k = 0, ind = 0; k < n; k += 4, ind ++) {
+                t[ind] = _mm_load_ps(&A[i * N + k]);
+            }
             for (j = 0; j < n; j++) {
                 // SIMD
-                __m128 sum = _mm_setzero_ps();
+                sum = _mm_setzero_ps();
                 
                 // mul and sum 4 pairs of float in 4 instructions
-                for (k = 0; k < n; k += 4) {
-                    sum = _mm_add_ps(sum, _mm_mul_ps(_mm_load_ps(&A[i * N + k]),
-                                                     _mm_load_ps(&B_t[j * N + k])));
+                for (ind = 0, k = 0; k < n; k += 4, ind++) {
+                    sum = _mm_add_ps(sum, _mm_mul_ps(t[ind],preload_B[j][ind]));
                 }
                 // store __m128 to float array, sum up and save
                 _mm_store_ps(temp, sum);
                 result = temp[0] + temp[1] + temp[2] + temp[3];
                 sq_matrix_result[i*n + j] = result;
             }
-        
+        }
         //free
         if (n != N)
             free(A);
