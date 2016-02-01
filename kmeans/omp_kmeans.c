@@ -158,6 +158,7 @@ float** omp_kmeans(int     is_perform_atomic, /* in: */
     if (_debug) timing = omp_get_wtime();
     do {
         delta = 0.0;
+        int deltas[16];
         
         if (is_perform_atomic) {
 #pragma omp parallel for \
@@ -187,45 +188,21 @@ reduction(+:delta)
         }
         else {
 #pragma omp parallel \
-shared(objects,clusters,membership,local_newClusters,local_newClusterSize)
+shared(objects,clusters,membership,local_newClusters,local_newClusterSize,numObjs,numClusters,numCoords)
             {
                 int tid = omp_get_thread_num();
+                
 #pragma omp for \
 private(i,j,index) \
-firstprivate(numObjs,numClusters,numCoords) \
-schedule(static) \
-reduction(+:delta)
+schedule(static)
                 //firstprivate: Listed variables are initialized according to the value of their original objects prior to entry into the parallel or work-sharing construct.
                 for (i=0; i<numObjs; i++) {
                     /* find the array index of nestest cluster center */
-                    
-                    
-                    
-                    int   _i, _j;
-                    float _dist, _min_dist;
-                    
-                    /* find the cluster id that has min distance to object */
-                    index    = 0;
-                    _min_dist = 0;
-                    for (_j=0; _j<numCoords; _j++)
-                        _min_dist += (objects[i][_j]-clusters[0][_j]) * (objects[i][_j]-clusters[0][_j]);
-                    
-                    for (_i=1; _i<numClusters; _i++) {
-                        _dist = 0;
-                        for (_j=0; _j<numCoords; _j++)
-                            _dist += (objects[i][_j]-clusters[_i][_j]) * (objects[i][_j]-clusters[_i][_j]);
-                        /* no need square root */
-                        if (_dist < _min_dist) { /* find the min and its array index */
-                            _min_dist = _dist;
-                            index    = _i;
-                        }
-                    }
-                    
-//                    index = find_nearest_cluster(numClusters, numCoords,
-//                                                 objects[i], clusters);
+                    index = find_nearest_cluster(numClusters, numCoords,
+                                                 objects[i], clusters);
                     
                     /* if membership changes, increase delta by 1 */
-                    if (membership[i] != index) delta += 1.0;
+                    if (membership[i] != index) deltas[tid] += 1.0;
                     
                     /* assign the membership to object i */
                     membership[i] = index;
@@ -237,6 +214,8 @@ reduction(+:delta)
                         local_newClusters[tid][index][j] += objects[i][j];
                 }
             } /* end of #pragma omp parallel */
+            for (j=0; j<nthreads; j++)
+                delta+=deltas[j];
             
             /* let the main thread perform the array reduction */
             for (i=0; i<numClusters; i++) {
