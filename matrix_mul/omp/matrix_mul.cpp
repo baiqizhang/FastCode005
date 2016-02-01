@@ -57,7 +57,7 @@ namespace omp
         
         // Matrix Mul
         float temp[8], result;
-        __m128 t[250];
+        __m128 t[1000];
         __m128 sum;
         unsigned int ind;
         
