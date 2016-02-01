@@ -109,13 +109,21 @@ float** omp_kmeans(int     is_perform_atomic, /* in: */
         clusters[i] = clusters[i-1] + numCoords;
     
     /* pick first numClusters elements of objects[] as initial cluster centers*/
+#pragma omp parallel for private(i,j) schedule(static) collapse(2) // added by Vincent                
     for (i=0; i<numClusters; i++)
         for (j=0; j<numCoords; j++)
             clusters[i][j] = objects[i][j];
     
-    /* initialize membership[] */        
-    for (i=0; i<numObjs; i++) membership[i] = -1;
-    
+    /* initialize membership[] */   
+    // loop unrolling - added by Vincent
+    for (i=0; i<numObjs-3; i += 4) {
+        membership[i] = -1;
+        membership[i+1] = -1;
+        membership[i+2] = -1;
+        membership[i+3] = -1;
+    }
+    for (j = i; j < numObjs; j++) membership[i] = -1;
+
     /* need to initialize newClusterSize and newClusters[0] to all 0 */
     newClusterSize = (int*) calloc(numClusters, sizeof(int));
     assert(newClusterSize != NULL);
