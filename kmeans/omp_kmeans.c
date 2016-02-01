@@ -198,8 +198,31 @@ reduction(+:delta)
                 //firstprivate: Listed variables are initialized according to the value of their original objects prior to entry into the parallel or work-sharing construct.
                 for (i=0; i<numObjs; i++) {
                     /* find the array index of nestest cluster center */
-                    index = find_nearest_cluster(numClusters, numCoords,
-                                                 objects[i], clusters);
+                    
+                    
+                    
+                    int   _i, _j;
+                    float _dist, _min_dist;
+                    
+                    /* find the cluster id that has min distance to object */
+                    index    = 0;
+                    _min_dist = 0;
+                    for (_j=0; _j<numCoords; _j++)
+                        _min_dist += (objects[i][_j]-clusters[0][_j]) * (objects[i][_j]-clusters[0][_j]);
+                    
+                    for (_i=1; _i<numClusters; _i++) {
+                        _dist = 0;
+                        for (_j=0; _j<numCoords; _j++)
+                            _dist += (objects[i][_j]-clusters[_i][_j]) * (objects[i][_j]-clusters[_i][_j]);
+                        /* no need square root */
+                        if (_dist < _min_dist) { /* find the min and its array index */
+                            _min_dist = _dist;
+                            index    = _i;
+                        }
+                    }
+                    
+//                    index = find_nearest_cluster(numClusters, numCoords,
+//                                                 objects[i], clusters);
                     
                     /* if membership changes, increase delta by 1 */
                     if (membership[i] != index) delta += 1.0;
