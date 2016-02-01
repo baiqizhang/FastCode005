@@ -23,12 +23,9 @@
 #include <immintrin.h>
 #include <pmmintrin.h>
 
-__m128 t[1000];
-__m128 preload_B[1000][250];
 
 namespace omp
 {
-    
     void
     matrix_multiplication(float *sq_matrix_1, float *sq_matrix_2, float *sq_matrix_result, unsigned int sq_dimension )
     {
@@ -49,7 +46,7 @@ namespace omp
         
         //transpose B
         B_t = (float*)calloc(N*N, sizeof(float));
-#pragma omp parallel for \ 
+#pragma omp parallel for \
         shared(A,B_t,sq_matrix_1,sq_matrix_2)
         for (i = 0; i < n; i++)
             for(j = 0; j < n; j++){
@@ -60,19 +57,15 @@ namespace omp
         
         // Matrix Mul
         float temp[8], result;
+        __m128 t[1000];
         __m128 sum;
         unsigned int ind;
-
-        for (i = 0; i < n; i++)
-            for (k = 0, ind = 0; k < n; k += 4, ind ++) {
-                preload_B[i][ind] = _mm_load_ps(&B_t[i * N + k]);
-            }
-
-
+        
+        
 #pragma omp parallel for \
-    private(i,j,k,ind,sum,t,temp,result) \
-    shared(sq_matrix_result,A,B_t) \
-    schedule(static)
+private(i,j,k,ind,sum,t,temp,result) \
+shared(sq_matrix_result,A,B_t) \
+schedule(static)
         for (i = 0; i < n; i++){
             // pre-load A
             for (k = 0, ind = 0; k < n; k += 4, ind ++) {
@@ -84,8 +77,7 @@ namespace omp
                 
                 // mul and sum 4 pairs of float in 4 instructions
                 for (ind = 0, k = 0; k < n; k += 4, ind++) {
-//                    sum = _mm_add_ps(sum, _mm_mul_ps(t[ind],_mm_load_ps(&B_t[j * N + k]) ));
-                    sum = _mm_add_ps(sum, _mm_mul_ps(t[ind],preload_B[j][ind] ));
+                    sum = _mm_add_ps(sum, _mm_mul_ps(t[ind],_mm_load_ps(&B_t[j * N + k]) ));
                 }
                 // store __m128 to float array, sum up and save
                 _mm_store_ps(temp, sum);
