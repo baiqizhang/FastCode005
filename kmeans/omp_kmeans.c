@@ -22,32 +22,7 @@
 
 #include <omp.h>
 #include "kmeans.h"
-#include <pmmintrin.h>
 
-/*----< euclid_dist_2() >----------------------------------------------------*/
-/* square of Euclid distance between two multi-dimensional points            */
-__inline static
-float euclid_dist_2(int    numdims,  /* no. dimensions */
-                    float *coord1,   /* [numdims] */
-                    float *coord2)   /* [numdims] */
-{
-    int i;
-    float ans=0.0;
-    float temp[8];
-    
-    for (i=0; i<numdims; i+=4){
-        __m128 c1 = _mm_load_ps(&coord1[i]);
-        __m128 c2 = _mm_load_ps(&coord2[i]);
-        __m128 dif = _mm_sub_ps(c1,c2);
-        __m128 mul = _mm_mul_ps(dif,dif);
-        
-        _mm_store_ps(temp, mul);
-        ans += temp[0] + temp[1] + temp[2] + temp[3];
-
-//        ans += (coord1[i]-coord2[i]) * (coord1[i]-coord2[i]);
-    }
-    return(ans);
-}
 
 /*----< find_nearest_cluster() >---------------------------------------------*/
 __inline static
@@ -58,17 +33,17 @@ int find_nearest_cluster(int     numClusters, /* no. clusters */
 {
     int   index, i, j;
     float dist, min_dist;
-
+    
     /* find the cluster id that has min distance to object */
     index    = 0;
-    min_dist = euclid_dist_2(numCoords, object, clusters[0]);
-//    for (j=0; j<numCoords; j++)
-//        min_dist += (object[j]-clusters[0][j]) * (object[j]-clusters[0][j]);
-
+    min_dist = 0;//euclid_dist_2(numCoords, object, clusters[0]);
+    for (j=0; j<numCoords; j++)
+        min_dist += (object[j]-clusters[0][j]) * (object[j]-clusters[0][j]);
+    
     for (i=1; i<numClusters; i++) {
-        dist = euclid_dist_2(numCoords, object, clusters[i]);
-//        for (j=0; j<numCoords; j++)
-//            dist += (object[j]-clusters[i][j]) * (object[j]-clusters[i][j]);
+        dist = 0;//euclid_dist_2(numCoords, object, clusters[i]);
+        for (j=0; j<numCoords; j++)
+            dist += (object[j]-clusters[i][j]) * (object[j]-clusters[i][j]);
         /* no need square root */
         if (dist < min_dist) { /* find the min and its array index */
             min_dist = dist;
@@ -89,88 +64,55 @@ float** omp_kmeans(int     is_perform_atomic, /* in: */
                    float   threshold,         /* % objects change membership */
                    int    *membership)        /* out: [numObjs] */
 {
-
+    
     int      i, j, k, index, loop=0;
     int     *newClusterSize; /* [numClusters]: no. objects assigned in each
-                                new cluster */
+                              new cluster */
     float    delta;          /* % of objects change their clusters */
     float  **clusters;       /* out: [numClusters][numCoords] */
-    float  **newClusters;    /* with paddings[numClusters][numCoords] */
+    float  **newClusters;    /* [numClusters][numCoords] */
     double   timing;
-
+    
     int      nthreads;             /* no. threads */
     int    **local_newClusterSize; /* [nthreads][numClusters] */
     float ***local_newClusters;    /* [nthreads][numClusters][numCoords] */
     
-    float  **outputClusters;       /* out: [numClusters][numCoords_old] */
-
-    int numCoords_old = numCoords;
-    float **newObjects;
-    if ((numCoords & 3) !=0){
-        numCoords = numCoords - (numCoords&3) + 4;
-        
-        /* allocate a 2D space for returning variable clusters[] (coordinates
-         of cluster centers) */
-        newObjects    = (float**) malloc(numObjs *             sizeof(float*));
-        assert(newObjects != NULL);
-        newObjects[0] = (float*)  malloc(numObjs * numCoords * sizeof(float));
-        assert(newObjects[0] != NULL);
-        for (i=1; i<numObjs; i++)
-            newObjects[i] = newObjects[i-1] + numCoords;
-        
-        for (i=0; i<numObjs; i++)
-            for (j=0; j<numCoords_old; j++)
-                newObjects[i][j] = objects[i][j];
-
-    } else {
-        newObjects = objects;
-    }
     
-//    printf("\nold: %d new:%d\n", numCoords_old,numCoords);
-    
-    /* allocate outputClusters */
-    outputClusters    = (float**) malloc(numClusters *             sizeof(float*));
-    assert(outputClusters != NULL);
-    outputClusters[0] = (float*)  malloc(numClusters * numCoords_old * sizeof(float));
-    assert(outputClusters[0] != NULL);
-    for (i=1; i<numClusters; i++)
-        outputClusters[i] = outputClusters[i-1] + numCoords_old;
-    
-    // The code below is not changed except that var Objects is change to newObjects
+    is_perform_atomic = 0;
     
     nthreads = omp_get_max_threads();
-
+    
     /* allocate a 2D space for returning variable clusters[] (coordinates
-       of cluster centers) */
+     of cluster centers) */
     clusters    = (float**) malloc(numClusters *             sizeof(float*));
     assert(clusters != NULL);
     clusters[0] = (float*)  malloc(numClusters * numCoords * sizeof(float));
     assert(clusters[0] != NULL);
     for (i=1; i<numClusters; i++)
         clusters[i] = clusters[i-1] + numCoords;
-
+    
     /* pick first numClusters elements of objects[] as initial cluster centers*/
     for (i=0; i<numClusters; i++)
         for (j=0; j<numCoords; j++)
-            clusters[i][j] = newObjects[i][j];
-
+            clusters[i][j] = objects[i][j];
+    
     /* initialize membership[] */
     for (i=0; i<numObjs; i++) membership[i] = -1;
-
+    
     /* need to initialize newClusterSize and newClusters[0] to all 0 */
     newClusterSize = (int*) calloc(numClusters, sizeof(int));
     assert(newClusterSize != NULL);
-
+    
     newClusters    = (float**) malloc(numClusters *            sizeof(float*));
     assert(newClusters != NULL);
     newClusters[0] = (float*)  calloc(numClusters * numCoords, sizeof(float));
     assert(newClusters[0] != NULL);
     for (i=1; i<numClusters; i++)
         newClusters[i] = newClusters[i-1] + numCoords;
-
+    
     /* each thread calculates new centers using a private space,
-       then thread 0 does an array reduction on them. This approach
-       should be faster */
+     then thread 0 does an array reduction on them. This approach
+     should be faster */
     local_newClusterSize    = (int**) malloc(nthreads * sizeof(int*));
     assert(local_newClusterSize != NULL);
     local_newClusterSize[0] = (int*)  calloc(nthreads*numClusters,
@@ -178,7 +120,7 @@ float** omp_kmeans(int     is_perform_atomic, /* in: */
     assert(local_newClusterSize[0] != NULL);
     for (i=1; i<nthreads; i++)
         local_newClusterSize[i] = local_newClusterSize[i-1]+numClusters;
-
+    
     /* local_newClusters is a 3D array */
     local_newClusters    =(float***)malloc(nthreads * sizeof(float**));
     assert(local_newClusters != NULL);
@@ -194,40 +136,40 @@ float** omp_kmeans(int     is_perform_atomic, /* in: */
             assert(local_newClusters[i][j] != NULL);
         }
     }
-
+    
     if (_debug) timing = omp_get_wtime();
     do {
         delta = 0.0;
-
-        #pragma omp parallel \
-                shared(newObjects,clusters,membership,local_newClusters,local_newClusterSize)
+        
+#pragma omp parallel \
+shared(objects,clusters,membership,local_newClusters,local_newClusterSize)
         {
             int tid = omp_get_thread_num();
-            #pragma omp for \
-                        private(i,j,index) \
-                        firstprivate(numObjs,numClusters,numCoords) \
-                        schedule(static) \
-                        reduction(+:delta)
+#pragma omp for \
+private(i,j,index) \
+firstprivate(numObjs,numClusters,numCoords) \
+schedule(static) \
+reduction(+:delta)
             //firstprivate: Listed variables are initialized according to the value of their original objects prior to entry into the parallel or work-sharing construct.
             for (i=0; i<numObjs; i++) {
                 /* find the array index of nestest cluster center */
                 index = find_nearest_cluster(numClusters, numCoords,
-                                             newObjects[i], clusters);
-
+                                             objects[i], clusters);
+                
                 /* if membership changes, increase delta by 1 */
                 if (membership[i] != index) delta += 1.0;
-
+                
                 /* assign the membership to object i */
                 membership[i] = index;
-
+                
                 /* update new cluster centers : sum of all objects located
-                   within (average will be performed later) */
+                 within (average will be performed later) */
                 local_newClusterSize[tid][index]++;
                 for (j=0; j<numCoords; j++)
-                    local_newClusters[tid][index][j] += newObjects[i][j];
+                    local_newClusters[tid][index][j] += objects[i][j];
             }
         } /* end of #pragma omp parallel */
-
+        
         /* let the main thread perform the array reduction */
         for (i=0; i<numClusters; i++) {
             for (j=0; j<nthreads; j++) {
@@ -249,35 +191,28 @@ float** omp_kmeans(int     is_perform_atomic, /* in: */
             }
             newClusterSize[i] = 0;   /* set back to 0 */
         }
-            
+        
         delta /= numObjs;
     } while (delta > threshold && loop++ < 500);
-
+    
     if (_debug) {
         timing = omp_get_wtime() - timing;
         printf("nloops = %2d (T = %7.4f)",loop,timing);
     }
-
+    
     free(local_newClusterSize[0]);
     free(local_newClusterSize);
-
+    
     for (i=0; i<nthreads; i++)
         for (j=0; j<numClusters; j++)
             free(local_newClusters[i][j]);
     free(local_newClusters[0]);
     free(local_newClusters);
-
+    
     free(newClusters[0]);
     free(newClusters);
     free(newClusterSize);
-
-    // the code before is not changed
     
-    for (i=0; i<numClusters; i++)
-        for (j=0; j<numCoords_old; j++)
-            outputClusters[i][j] = clusters[i][j];
-    free(clusters);
-
-    return outputClusters;
+    return clusters;
 }
 
