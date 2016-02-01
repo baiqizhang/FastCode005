@@ -26,10 +26,14 @@
 
 namespace omp
 {
+    
+    __m128 t[1000];
+
+    
     void
     matrix_multiplication(float *sq_matrix_1, float *sq_matrix_2, float *sq_matrix_result, unsigned int sq_dimension )
     {
-        //Test Case 5	68.302 milliseconds
+        //Test Case 6	55.918 milliseconds
         float *A, *B_t;
         unsigned int n = sq_dimension, N;
         unsigned int i, j, k;
@@ -57,7 +61,6 @@ namespace omp
         
         // Matrix Mul
         float temp[8], result;
-        __m128 t[1000];
         __m128 sum;
         unsigned int ind;
         
@@ -67,6 +70,7 @@ namespace omp
     shared(sq_matrix_result,A,B_t) \
     schedule(static)
         for (i = 0; i < n; i++){
+            // pre-load A
             for (k = 0, ind = 0; k < n; k += 4, ind ++) {
                 t[ind] = _mm_load_ps(&A[i * N + k]);
             }
