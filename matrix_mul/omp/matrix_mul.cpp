@@ -26,9 +26,6 @@
 
 namespace omp
 {
-    __m128 t[1000];
-    __m128 preload[1000][250];
-    
     void
     matrix_multiplication(float *sq_matrix_1, float *sq_matrix_2, float *sq_matrix_result, unsigned int sq_dimension )
     {
@@ -36,18 +33,6 @@ namespace omp
         float *A, *B_t;
         unsigned int n = sq_dimension, N;
         unsigned int i, j, k;
-        
-        if (n<50){
-#pragma omp parallel for
-            for (unsigned int i = 0; i < sq_dimension; i++)
-                for(unsigned int j = 0; j < sq_dimension; j++)
-                {
-                    sq_matrix_result[i*sq_dimension + j] = 0;
-                    for (unsigned int k = 0; k < sq_dimension; k++)
-                        sq_matrix_result[i*sq_dimension + j] += sq_matrix_1[i*sq_dimension + k] * sq_matrix_2[k*sq_dimension + j];
-                }
-            return;
-        }
         
         
         // if n is not multiple of 4, create padding. N = n + 4 - (n&3). O(N^2)
@@ -75,40 +60,55 @@ namespace omp
         __m128 t[1000];
         __m128 sum;
         unsigned int ind;
-        
-        for (i = 0; i < n; i++)
-            for (k = 0, ind = 0; k < n; k += 4, ind ++) {
-                preload[i][ind] = _mm_load_ps(&B_t[i * N + k]);
-            }
+        unsigned int step = 4;
         
 #pragma omp parallel for \
-private(i,j,k,ind,sum,t,temp,result) \
+private(k,ind,sum,t,temp,result) \
 shared(sq_matrix_result,A,B_t) \
 schedule(static)
-        for (i = 0; i < n; i++){
-            // pre-load A
-            for (k = 0, ind = 0; k < n; k += 4, ind ++) {
-                t[ind] = _mm_load_ps(&A[i * N + k]);
-            }
-            for (j = 0; j < n; j++) {
-                // SIMD
-                sum = _mm_setzero_ps();
-                
-                // mul and sum 4 pairs of float in 4 instructions
-                for (ind = 0, k = 0; k < n; k += 4, ind++) {
-                    sum = _mm_add_ps(sum, _mm_mul_ps(t[ind],preload[j][ind] ));
-//                    sum = _mm_add_ps(sum, _mm_mul_ps(t[ind],_mm_load_ps(&B_t[j * N + k]) ));
+        for (unsigned int ii=0;ii<n;ii+=step)
+            for (unsigned int jj=0;jj<n;jj+=step){
+                unsigned int ilim = ii+step>n?n:ii+step;
+                unsigned int jlim = jj+step>n?n:jj+step;
+                for (unsigned int i = ii; i < ilim; i++){
+                    for (unsigned int j = jj; j < jlim; j++) {
+                        // SIMD
+                        sum = _mm_setzero_ps();
+                        
+                        // mul and sum 4 pairs of float in 4 instructions
+                        for (ind = 0, k = 0; k < n; k += 4, ind++) {
+                            sum = _mm_add_ps(sum, _mm_mul_ps(_mm_load_ps(&A[i * N + k]),_mm_load_ps(&B_t[j * N + k]) ));
+                        }
+                        // store __m128 to float array, sum up and save
+                        _mm_store_ps(temp, sum);
+                        result = temp[0] + temp[1] + temp[2] + temp[3];
+                        sq_matrix_result[i*n + j] = result;
+                    }
                 }
-                // store __m128 to float array, sum up and save
-                _mm_store_ps(temp, sum);
-                result = temp[0] + temp[1] + temp[2] + temp[3];
-                sq_matrix_result[i*n + j] = result;
             }
-        }
+
+//        for (unsigned int i = 0; i < n; i++){
+//            // pre-load A
+//            for (k = 0, ind = 0; k < n; k += 4, ind ++) {
+//                t[ind] = _mm_load_ps(&A[i * N + k]);
+//            }
+//            for (unsigned int j = 0; j < n; j++) {
+//                // SIMD
+//                sum = _mm_setzero_ps();
+//                
+//                // mul and sum 4 pairs of float in 4 instructions
+//                for (ind = 0, k = 0; k < n; k += 4, ind++) {
+//                    sum = _mm_add_ps(sum, _mm_mul_ps(t[ind],_mm_load_ps(&B_t[j * N + k]) ));
+//                }
+//                // store __m128 to float array, sum up and save
+//                _mm_store_ps(temp, sum);
+//                result = temp[0] + temp[1] + temp[2] + temp[3];
+//                sq_matrix_result[i*n + j] = result;
+//            }
+//        }
         //free
         if (n != N)
             free(A);
         free(B_t);
     }
-
 }
