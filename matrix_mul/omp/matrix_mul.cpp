@@ -22,12 +22,11 @@
 #include <stdio.h>
 #include <immintrin.h>
 #include <pmmintrin.h>
+__m128 t[1000];
 
 
 namespace omp
 {
-    __m128 t[1000];
-
     void
     matrix_multiplication(float *sq_matrix_1, float *sq_matrix_2, float *sq_matrix_result, unsigned int sq_dimension )
     {
@@ -86,11 +85,12 @@ namespace omp
             }
             for (j = 0; j < n; j++) {
                 // SIMD
+                sum = _mm_setzero_ps();
                 
                 // mul and sum 4 pairs of float in 4 instructions
-                for (ind = 0, k = 0; k < n; k += 4, ind++)
-                    sum = _mm_mul_ps(t[ind],_mm_load_ps(&B_t[j * N + k]) );
-
+                for (ind = 0, k = 0; k < n; k += 4, ind++) {
+                    sum = _mm_add_ps(sum, _mm_mul_ps(t[ind],_mm_load_ps(&B_t[j * N + k]) ));
+                }
                 // store __m128 to float array, sum up and save
                 _mm_store_ps(temp, sum);
                 result = temp[0] + temp[1] + temp[2] + temp[3];
