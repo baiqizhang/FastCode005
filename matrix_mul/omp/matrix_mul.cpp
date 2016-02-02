@@ -27,6 +27,7 @@
 namespace omp
 {
     __m128 t[1000];
+    __m128 preload[1000][250];
     
     void
     matrix_multiplication(float *sq_matrix_1, float *sq_matrix_2, float *sq_matrix_result, unsigned int sq_dimension )
@@ -75,6 +76,10 @@ namespace omp
         __m128 sum;
         unsigned int ind;
         
+        for (i = 0; i < n; i++)
+            for (k = 0, ind = 0; k < n; k += 4, ind ++) {
+                preload[i][ind] = _mm_load_ps(&B_t[i * N + k]);
+            }
         
 #pragma omp parallel for \
 private(i,j,k,ind,sum,t,temp,result) \
@@ -91,7 +96,8 @@ schedule(static)
                 
                 // mul and sum 4 pairs of float in 4 instructions
                 for (ind = 0, k = 0; k < n; k += 4, ind++) {
-                    sum = _mm_add_ps(sum, _mm_mul_ps(t[ind],_mm_load_ps(&B_t[j * N + k]) ));
+                    sum = _mm_add_ps(sum, _mm_mul_ps(t[ind],preload[i][ind] ));
+//                    sum = _mm_add_ps(sum, _mm_mul_ps(t[ind],_mm_load_ps(&B_t[j * N + k]) ));
                 }
                 // store __m128 to float array, sum up and save
                 _mm_store_ps(temp, sum);
