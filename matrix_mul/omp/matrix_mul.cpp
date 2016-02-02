@@ -60,12 +60,12 @@ namespace omp
         __m128 t[1000];
         __m128 sum;
         unsigned int ind;
-        unsigned int step = 2;
+        unsigned int step = 1;
         
 #pragma omp parallel for \
 private(k,ind,sum,t,temp,result) \
 shared(sq_matrix_result,A,B_t) \
-schedule(static)
+schedule(static,1)
         for (unsigned int ii=0;ii<n;ii+=step)
             for (unsigned int jj=0;jj<n;jj+=step){
                 unsigned int ilim = ii+step>n?n:ii+step;
