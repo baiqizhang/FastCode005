@@ -23,6 +23,9 @@
 #include <immintrin.h>
 #include <pmmintrin.h>
 
+__m128 t[1000];
+float A[1000*1000];
+float B_t[1000*1000];
 
 namespace omp
 {
@@ -30,12 +33,11 @@ namespace omp
     matrix_multiplication(float *sq_matrix_1, float *sq_matrix_2, float *sq_matrix_result, unsigned int sq_dimension )
     {
         //Test Case 6	55.918 milliseconds
-        float *A, *B_t;
+        float *A;
         unsigned int n = sq_dimension, N;
         unsigned int i, j, k;
-        __m128 t[1000];
-
-        if (n<50){
+        
+        if (n<200){
 #pragma omp parallel for
             for (unsigned int i = 0; i < sq_dimension; i++)
                 for(unsigned int j = 0; j < sq_dimension; j++)
@@ -49,16 +51,14 @@ namespace omp
         
         
         // if n is not multiple of 4, create padding. N = n + 4 - (n&3). O(N^2)
-        if ((n & 3) != 0){
-            N = n - (n&3) + 4;
-            A = (float*)calloc(N*N, sizeof(float)); // filled with 0
+        if ((n & 7) != 0){
+            N = n - (n&7) + 8;
         } else {
             N = n;
             A = sq_matrix_1;
         }
         
         //transpose B
-        B_t = (float*)calloc(N*N, sizeof(float));
 #pragma omp parallel for \
         shared(A,B_t,sq_matrix_1,sq_matrix_2)
         for (i = 0; i < n; i++)
@@ -88,8 +88,9 @@ namespace omp
                 sum = _mm_setzero_ps();
                 
                 // mul and sum 4 pairs of float in 4 instructions
-                for (ind = 0, k = 0; k < n; k += 4, ind++) {
+                for (ind = 0, k = 0; k < n; k += 8, ind+=2) {
                     sum = _mm_add_ps(sum, _mm_mul_ps(t[ind],_mm_load_ps(&B_t[j * N + k]) ));
+                    sum = _mm_add_ps(sum, _mm_mul_ps(t[ind+1],_mm_load_ps(&B_t[j * N + k+4]) ));
                 }
                 // store __m128 to float array, sum up and save
                 _mm_store_ps(temp, sum);
@@ -97,9 +98,5 @@ namespace omp
                 sq_matrix_result[i*n + j] = result;
             }
         }
-        //free
-        if (n != N)
-            free(A);
-        free(B_t);
     }
 }

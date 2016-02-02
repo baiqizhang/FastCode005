@@ -6,7 +6,7 @@ LDFLAGS = -L/opt/local/lib -L$(HOME)/cppunit/lib
 LIBS = -lcppunit -ldl
 OBJS = $(patsubst %.cpp,%.o,$(wildcard *.cpp))
 OMPFLAGS = -fopenmp
-SIMDFLAGS = -msse2 -msse3 -O3 -lm  -funroll-loops -ftree-vectorize -ffast-math
+SIMDFLAGS = -msse2 -msse3 -O3 -lm  -funroll-loops -ftree-vectorize
 
 all: $(PROJ)
 
