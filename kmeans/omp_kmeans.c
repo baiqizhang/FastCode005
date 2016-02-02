@@ -106,15 +106,11 @@ float** omp_kmeans(int     is_perform_atomic, /* in: */
     assert(clusters[0] != NULL);
 
     // loop unrolling - added by Vincent
-    for (i = 1; i < numClusters-7; i += 8) {
+    for (i = 1; i < numClusters-3; i += 4) {
         clusters[i] = clusters[i-1] + numCoords;
         clusters[i+1] = clusters[i] + numCoords;
         clusters[i+2] = clusters[i+1] + numCoords;
         clusters[i+3] = clusters[i+2] + numCoords;
-        clusters[i+4] = clusters[i+3] + numCoords;
-        clusters[i+5] = clusters[i+4] + numCoords;
-        clusters[i+6] = clusters[i+5] + numCoords;
-        clusters[i+7] = clusters[i+6] + numCoords;
     }        
     for (j = i; j < numClusters; j++) clusters[j] = clusters[j-1] + numCoords;   
     
@@ -126,15 +122,11 @@ float** omp_kmeans(int     is_perform_atomic, /* in: */
     
     /* initialize membership[] */   
     // loop unrolling - added by Vincent
-    for (i=0; i<numObjs-7; i += 8) {
+    for (i=0; i<numObjs-3; i += 4) {
         membership[i] = -1;
         membership[i+1] = -1;
         membership[i+2] = -1;
         membership[i+3] = -1;
-        membership[i+4] = -1;
-        membership[i+5] = -1;
-        membership[i+6] = -1;
-        membership[i+7] = -1;
     }
     for (j = i; j < numObjs; j++) membership[j] = -1;
 
@@ -148,15 +140,11 @@ float** omp_kmeans(int     is_perform_atomic, /* in: */
     assert(newClusters[0] != NULL);
 
     // loop unrolling - added by Vincent
-    for (i=1; i < numClusters-7; i += 8) {
+    for (i=1; i < numClusters-3; i += 4) {
         newClusters[i] = newClusters[i-1] + numCoords;        
         newClusters[i+1] = newClusters[i] + numCoords;
         newClusters[i+2] = newClusters[i+1] + numCoords;
         newClusters[i+3] = newClusters[i+2] + numCoords;
-        newClusters[i+4] = newClusters[i+3] + numCoords;        
-        newClusters[i+5] = newClusters[i+4] + numCoords;
-        newClusters[i+6] = newClusters[i+5] + numCoords;
-        newClusters[i+7] = newClusters[i+6] + numCoords;
     }
     for (j = i; j < numClusters; j++) newClusters[j] = newClusters[j-1] + numCoords;
     
