@@ -34,6 +34,20 @@ namespace omp
         unsigned int n = sq_dimension, N;
         unsigned int i, j, k;
         
+        if (n<50){
+            sq_matrix_result[i*sq_dimension + j] = 0;
+#pragma omp parallel for
+            for (unsigned int i = 0; i < sq_dimension; i++)
+                for(unsigned int j = 0; j < sq_dimension; j++)
+                    sq_matrix_result[i*sq_dimension + j] = 0;
+
+#pragma omp parallel for
+            for (unsigned int i = 0; i < sq_dimension; i++)
+                for (unsigned int k = 0; k < sq_dimension; k++)
+                    for(unsigned int j = 0; j < sq_dimension; j++)
+                        sq_matrix_result[i*sq_dimension + j] += sq_matrix_1[i*sq_dimension + k] * sq_matrix_2[k*sq_dimension + j];
+            return;
+        }
         
         // if n is not multiple of 4, create padding. N = n + 4 - (n&3). O(N^2)
         if ((n & 3) != 0){
