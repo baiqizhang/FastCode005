@@ -34,7 +34,7 @@ namespace omp
         unsigned int n = sq_dimension, N;
         unsigned int i, j, k;
         
-        if (n<50){
+        if (n<100){
             sq_matrix_result[i*sq_dimension + j] = 0;
 #pragma omp parallel for
             for (unsigned int i = 0; i < sq_dimension; i++)
@@ -74,7 +74,7 @@ namespace omp
         __m128 t[1000];
         __m128 sum;
         unsigned int ind;
-        unsigned int step = 6;
+        unsigned int step = 8;
         
 #pragma omp parallel for \
 private(k,ind,sum,t,temp,result) \
