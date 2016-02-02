@@ -60,24 +60,28 @@ namespace omp
         __m128 t[1000];
         __m128 sum;
         unsigned int ind;
-        unsigned int step = 1;
+        unsigned int step = 4;
         
 #pragma omp parallel for \
 private(k,ind,sum,t,temp,result) \
 shared(sq_matrix_result,A,B_t) \
-schedule(static,1)
+schedule(static)
         for (unsigned int ii=0;ii<n;ii+=step)
             for (unsigned int jj=0;jj<n;jj+=step){
-                unsigned int ilim = ii+step>n?n:ii+step;
-                unsigned int jlim = jj+step>n?n:jj+step;
+                unsigned int ilim = ii+step>=n?n:ii+step;
+                unsigned int jlim = jj+step>=n?n:jj+step;
                 for (unsigned int i = ii; i < ilim; i++){
+                    // pre-load A
+                    for (k = 0, ind = 0; k < n; k += 4, ind ++) {
+                        t[ind] = _mm_load_ps(&A[i * N + k]);
+                    }
                     for (unsigned int j = jj; j < jlim; j++) {
                         // SIMD
                         sum = _mm_setzero_ps();
                         
                         // mul and sum 4 pairs of float in 4 instructions
                         for (ind = 0, k = 0; k < n; k += 4, ind++) {
-                            sum = _mm_add_ps(sum, _mm_mul_ps(_mm_load_ps(&A[i * N + k]),_mm_load_ps(&B_t[j * N + k]) ));
+                            sum = _mm_add_ps(sum, _mm_mul_ps(t[ind],_mm_load_ps(&B_t[j * N + k]) ));
                         }
                         // store __m128 to float array, sum up and save
                         _mm_store_ps(temp, sum);
