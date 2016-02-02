@@ -22,7 +22,6 @@
 #include <stdio.h>
 #include <immintrin.h>
 #include <pmmintrin.h>
-__m128 t[1000];
 
 
 namespace omp
@@ -34,7 +33,8 @@ namespace omp
         float *A, *B_t;
         unsigned int n = sq_dimension, N;
         unsigned int i, j, k;
-        
+        __m128 t[1000];
+
         if (n<50){
 #pragma omp parallel for
             for (unsigned int i = 0; i < sq_dimension; i++)
