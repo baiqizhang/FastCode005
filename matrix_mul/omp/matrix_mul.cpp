@@ -69,13 +69,12 @@ namespace omp
             }
         
         // Matrix Mul
-        float temp[8], result;
-        __m128 sum;
+        float temp[8];
         unsigned int ind;
         
         
 #pragma omp parallel for \
-        private(i,j,k,ind,sum,t,temp,result) \
+        private(i,j,k,ind,t,temp) \
         schedule(static)
 //shared(sq_matrix_result,A,B_t)
         for (i = 0; i < n; i++){
@@ -85,17 +84,20 @@ namespace omp
             }
             for (j = 0; j < n; j++) {
                 // SIMD
-                sum = _mm_setzero_ps();
+                __m128 sum1 = _mm_setzero_ps();
+                __m128 sum2 = _mm_setzero_ps();
                 
                 // mul and sum 4 pairs of float in 4 instructions
                 for (ind = 0, k = 0; k < n; k += 8, ind+=2) {
-                    sum = _mm_add_ps(sum, _mm_mul_ps(t[ind],_mm_load_ps(&B_t[j * N + k]) ));
-                    sum = _mm_add_ps(sum, _mm_mul_ps(t[ind+1],_mm_load_ps(&B_t[j * N + k+4]) ));
+                    sum1 = _mm_add_ps(sum1, _mm_mul_ps(t[ind],_mm_load_ps(&B_t[j * N + k]) ));
+                    sum2 = _mm_add_ps(sum2, _mm_mul_ps(t[ind+1],_mm_load_ps(&B_t[j * N + k+4]) ));
                 }
                 // store __m128 to float array, sum up and save
-                _mm_store_ps(temp, sum);
-                result = temp[0] + temp[1] + temp[2] + temp[3];
-                sq_matrix_result[i*n + j] = result;
+                _mm_store_ps(temp, sum1);
+                float result1 = temp[0] + temp[1] + temp[2] + temp[3];
+                _mm_store_ps(temp, sum2);
+                float result2 = temp[0] + temp[1] + temp[2] + temp[3];
+                sq_matrix_result[i*n + j] = result1 + result2;
             }
         }
     }
