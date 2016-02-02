@@ -105,8 +105,14 @@ float** omp_kmeans(int     is_perform_atomic, /* in: */
     clusters[0] = (float*)  malloc(numClusters * numCoords * sizeof(float));
     assert(clusters[0] != NULL);
 
-    for (i=1; i<numClusters; i++)
+    // loop unrolling - added by Vincent
+    for (i = 1; i < numClusters-3; i += 4) {
         clusters[i] = clusters[i-1] + numCoords;
+        clusters[i+1] = clusters[i] + numCoords;
+        clusters[i+2] = clusters[i+1] + numCoords;
+        clusters[i+3] = clusters[i+2] + numCoords;
+    }        
+    for (j = i; j < numClusters; j++) clusters[j] = clusters[j-1] + numCoords;   
     
     /* pick first numClusters elements of objects[] as initial cluster centers*/
 #pragma omp parallel for private(i,j) schedule(static) collapse(2) // added by Vincent                
@@ -122,7 +128,7 @@ float** omp_kmeans(int     is_perform_atomic, /* in: */
         membership[i+2] = -1;
         membership[i+3] = -1;
     }
-    for (j = i; j < numObjs; j++) membership[i] = -1;
+    for (j = i; j < numObjs; j++) membership[j] = -1;
 
     /* need to initialize newClusterSize and newClusters[0] to all 0 */
     newClusterSize = (int*) calloc(numClusters, sizeof(int));
@@ -133,8 +139,14 @@ float** omp_kmeans(int     is_perform_atomic, /* in: */
     newClusters[0] = (float*)  calloc(numClusters * numCoords, sizeof(float));
     assert(newClusters[0] != NULL);
 
-    for (i=1; i<numClusters; i++)
-        newClusters[i] = newClusters[i-1] + numCoords;
+    // loop unrolling - added by Vincent
+    for (i=1; i < numClusters-3; i += 4) {
+        newClusters[i] = newClusters[i-1] + numCoords;        
+        newClusters[i+1] = newClusters[i] + numCoords;
+        newClusters[i+2] = newClusters[i+1] + numCoords;
+        newClusters[i+3] = newClusters[i+2] + numCoords;
+    }
+    for (j = i; j < numClusters; j++) newClusters[j] = newClusters[i-1] + numCoords;
     
     if (!is_perform_atomic) {
         /* each thread calculates new centers using a private space,
