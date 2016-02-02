@@ -109,7 +109,7 @@ float** omp_kmeans(int     is_perform_atomic, /* in: */
         clusters[i] = clusters[i-1] + numCoords;
     
     /* pick first numClusters elements of objects[] as initial cluster centers*/
-#pragma omp parallel for private(i,j) schedule(static) collapse(2) // added by Vincent                
+#pragma omp parallel for private(i,j) schedule(static, 2) collapse(2) // added by Vincent                
     for (i=0; i<numClusters; i++)
         for (j=0; j<numCoords; j++)
             clusters[i][j] = objects[i][j];
