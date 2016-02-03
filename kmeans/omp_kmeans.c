@@ -238,11 +238,12 @@ reduction(+:delta)
         }
         else {
 #pragma omp parallel \
-shared(objects,clusters,membership,local_newClusters,local_newClusterSize,numObjs,numClusters,numCoords)
+shared(objects,clusters,membership,local_newClusters,local_newClusterSize)
             {
                 int tid = omp_get_thread_num();
 #pragma omp for \
 private(i,j) \
+firstprivate(numObjs,numClusters,numCoords) \
 schedule(static) \
 reduction(+:delta2)
                 
