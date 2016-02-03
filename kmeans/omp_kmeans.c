@@ -38,24 +38,15 @@ float euclid_dist_2(int    numdims,  /* no. dimensions */
     float ans=0.0;
     //    float temp[8]={0};
     
-    for (i=0; i<numdims-3; i+=4){
-        //        __m128 c1 = _mm_load_ps(&coord1[i]);
-        //        __m128 c2 = _mm_load_ps(&coord2[i]);
-        //        __m128 dif = _mm_sub_ps(c1,c2);
-        //        __m128 mul = _mm_mul_ps(dif,dif);
-        //        _mm_store_ps(temp, mul);
-        //        ans += temp[0] + temp[1] + temp[2] + temp[3];
-        //        printf("%d\n %f",i,ans);
-        
-        
+    for (i=0; i<numdims-7; i+=8){
         ans += (coord1[i]-coord2[i]) * (coord1[i]-coord2[i]);
         ans += (coord1[i+1]-coord2[i+1]) * (coord1[i+1]-coord2[i+1]);
         ans += (coord1[i+2]-coord2[i+2]) * (coord1[i+2]-coord2[i+2]);
         ans += (coord1[i+3]-coord2[i+3]) * (coord1[i+3]-coord2[i+3]);
-        //        ans += (coord1[i+4]-coord2[i+4]) * (coord1[i+4]-coord2[i+4]);
-        //        ans += (coord1[i+5]-coord2[i+5]) * (coord1[i+5]-coord2[i+5]);
-        //        ans += (coord1[i+6]-coord2[i+6]) * (coord1[i+6]-coord2[i+6]);
-        //        ans += (coord1[i+7]-coord2[i+7]) * (coord1[i+7]-coord2[i+7]);
+        ans += (coord1[i+4]-coord2[i+4]) * (coord1[i+4]-coord2[i+4]);
+        ans += (coord1[i+5]-coord2[i+5]) * (coord1[i+5]-coord2[i+5]);
+        ans += (coord1[i+6]-coord2[i+6]) * (coord1[i+6]-coord2[i+6]);
+        ans += (coord1[i+7]-coord2[i+7]) * (coord1[i+7]-coord2[i+7]);
     }
     for (; i<numdims; i++)
         ans += (coord1[i]-coord2[i]) * (coord1[i]-coord2[i]);
@@ -250,6 +241,7 @@ reduction(+:delta2)
                 //firstprivate: Listed variables are initialized according to the value of their original objects prior to entry into the parallel or work-sharing construct.
                 for (i=0; i<ilim; i+=4) {
                     /* find the array index of nestest cluster center */
+                    //n*k*d
                     int index1 = find_nearest_cluster(numClusters, numCoords,
                                                       objects[i], clusters);
                     
@@ -279,6 +271,7 @@ reduction(+:delta2)
                     local_newClusterSize[tid][index3]++;
                     local_newClusterSize[tid][index4]++;
                     
+                    //n*d
                     for (j=0; j<numCoords; j++){
                         local_newClusters[tid][index1][j] += objects[i][j];
                         local_newClusters[tid][index2][j] += objects[i+1][j];
