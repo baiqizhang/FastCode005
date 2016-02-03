@@ -35,13 +35,10 @@ namespace omp
         unsigned int i, j, k;
         
         if (n<100){
-            sq_matrix_result[i*sq_dimension + j] = 0;
-#pragma omp parallel for
             for (unsigned int i = 0; i < sq_dimension; i++)
                 for(unsigned int j = 0; j < sq_dimension; j++)
                     sq_matrix_result[i*sq_dimension + j] = 0;
 
-#pragma omp parallel for
             for (unsigned int i = 0; i < sq_dimension; i++)
                 for (unsigned int k = 0; k < sq_dimension; k++)
                     for(unsigned int j = 0; j < sq_dimension; j++)
