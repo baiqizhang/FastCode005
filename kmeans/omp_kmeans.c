@@ -238,36 +238,13 @@ reduction(+:delta)
         }
         else {
 #pragma omp parallel \
-shared(objects,clusters,membership,local_newClusters,local_newClusterSize)
+shared(objects,clusters,membership,local_newClusters,local_newClusterSize,numObjs,numClusters,numCoords)
             {
                 int tid = omp_get_thread_num();
 #pragma omp for \
 private(i,j) \
-firstprivate(numObjs,numClusters,numCoords) \
 schedule(static) \
 reduction(+:delta2)
-                //                //firstprivate: Listed variables are initialized according to the value of their original objects prior to entry into the parallel or work-sharing construct.
-                //                for (i=0; i<numObjs; i++) {
-                //                    /* find the array index of nestest cluster center */
-                //                    index = find_nearest_cluster(numClusters, numCoords,
-                //                                                 objects[i], clusters);
-                //
-                //                    /* if membership changes, increase delta by 1 */
-                //                    if (membership[i] != index) delta += 1.0;
-                //
-                //                    /* assign the membership to object i */
-                //                    membership[i] = index;
-                //
-                //                    /* update new cluster centers : sum of all objects located
-                //                     within (average will be performed later) */
-                //                    local_newClusterSize[tid][index]++;
-                //                    for (j=0; j<numCoords-3; j+=4){
-                //                        local_newClusters[tid][index][j] += objects[i][j];
-                //                        local_newClusters[tid][index][j+1] += objects[i][j+1];
-                //                        local_newClusters[tid][index][j+2] += objects[i][j+2];
-                //                        local_newClusters[tid][index][j+3] += objects[i][j+3];
-                //                    }
-                //                }
                 
                 //firstprivate: Listed variables are initialized according to the value of their original objects prior to entry into the parallel or work-sharing construct.
                 for (i=0; i<ilim; i+=4) {
@@ -283,11 +260,6 @@ reduction(+:delta2)
                     int index4 = find_nearest_cluster(numClusters, numCoords,
                                                       objects[i+3], clusters);
                     
-                    /* if membership changes, increase delta by 1 */
-                    //                    if (membership[i] != index1) delta += 1.0;
-                    //                    if (membership[i+1] != index2) delta += 1.0;
-                    //                    if (membership[i+2] != index3) delta += 1.0;
-                    //                    if (membership[i+3] != index4) delta += 1.0;
                     if (membership[i] != index1) delta2 ++;
                     if (membership[i+1] != index2) delta2 ++;
                     if (membership[i+2] != index3) delta2 ++;
