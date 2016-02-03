@@ -117,7 +117,8 @@ float** omp_kmeans(int     is_perform_atomic, /* in: */
 {
     
     int      i, j, k, index, loop=0;
-    int ilim = numObjs-(numObjs&3);
+    int mask = 7;
+    int ilim = numObjs-(numObjs&mask);
     int     *newClusterSize; /* [numClusters]: no. objects assigned in each
                               new cluster */
     float    delta;          /* % of objects change their clusters */
@@ -255,7 +256,7 @@ firstprivate(numObjs,numClusters,numCoords) \
 schedule(static) \
 reduction(+:delta)
                 //firstprivate: Listed variables are initialized according to the value of their original objects prior to entry into the parallel or work-sharing construct.
-                for (i=0; i<ilim; i+=4) {
+                for (i=0; i<ilim; i+=(mask+1)) {
                     /* find the array index of nestest cluster center */
                     int index1 = find_nearest_cluster(numClusters, numCoords,
                                                  objects[i], clusters);
@@ -268,27 +269,30 @@ reduction(+:delta)
                     int index4 = find_nearest_cluster(numClusters, numCoords,
                                                       objects[i+3], clusters);
 
-//                    int index5 = find_nearest_cluster(numClusters, numCoords,
-//                                                      objects[i+4], clusters);
-//                    int index6 = find_nearest_cluster(numClusters, numCoords,
-//                                                      objects[i+5], clusters);
-//                    int index7 = find_nearest_cluster(numClusters, numCoords,
-//                                                      objects[i+6], clusters);
-//                    
-//                    int index8 = find_nearest_cluster(numClusters, numCoords,
-//                                                      objects[i+7], clusters);
-                    
+                    if (maks == 7){
+                        int index5 = find_nearest_cluster(numClusters, numCoords,
+                                                          objects[i+4], clusters);
+                        int index6 = find_nearest_cluster(numClusters, numCoords,
+                                                          objects[i+5], clusters);
+                        int index7 = find_nearest_cluster(numClusters, numCoords,
+                                                          objects[i+6], clusters);
+                        
+                        int index8 = find_nearest_cluster(numClusters, numCoords,
+                                                          objects[i+7], clusters);
+                    }
 
                     /* if membership changes, increase delta by 1 */
                     if (membership[i] != index1) delta += 1.0;
                     if (membership[i+1] != index2) delta += 1.0;
                     if (membership[i+2] != index3) delta += 1.0;
                     if (membership[i+3] != index4) delta += 1.0;
-                    
-//                    if (membership[i+4] != index5) delta += 1.0;
-//                    if (membership[i+5] != index6) delta += 1.0;
-//                    if (membership[i+6] != index7) delta += 1.0;
-//                    if (membership[i+7] != index8) delta += 1.0;
+
+                    if (maks == 7){
+                        if (membership[i+4] != index5) delta += 1.0;
+                        if (membership[i+5] != index6) delta += 1.0;
+                        if (membership[i+6] != index7) delta += 1.0;
+                        if (membership[i+7] != index8) delta += 1.0;
+                    }
                     
                     /* assign the membership to object i */
                     membership[i] = index1;
@@ -296,10 +300,12 @@ reduction(+:delta)
                     membership[i+2] = index3;
                     membership[i+3] = index4;
 
-//                    membership[i+4] = index5;
-//                    membership[i+5] = index6;
-//                    membership[i+6] = index7;
-//                    membership[i+7] = index8;
+                    if (maks == 7){
+                        membership[i+4] = index5;
+                        membership[i+5] = index6;
+                        membership[i+6] = index7;
+                        membership[i+7] = index8;
+                    }
                     
                     /* update new cluster centers : sum of all objects located
                      within (average will be performed later) */
@@ -308,10 +314,12 @@ reduction(+:delta)
                     local_newClusterSize[tid][index3]++;
                     local_newClusterSize[tid][index4]++;
 
-//                    local_newClusterSize[tid][index5]++;
-//                    local_newClusterSize[tid][index6]++;
-//                    local_newClusterSize[tid][index7]++;
-//                    local_newClusterSize[tid][index8]++;
+                    if (maks == 7){
+                        local_newClusterSize[tid][index5]++;
+                        local_newClusterSize[tid][index6]++;
+                        local_newClusterSize[tid][index7]++;
+                        local_newClusterSize[tid][index8]++;
+                    }
                     
                     for (j=0; j<numCoords; j++){
                         local_newClusters[tid][index1][j] += objects[i][j];
@@ -319,44 +327,13 @@ reduction(+:delta)
                         local_newClusters[tid][index3][j] += objects[i+2][j];
                         local_newClusters[tid][index4][j] += objects[i+3][j];
 
-//                        local_newClusters[tid][index5][j] += objects[i+4][j];
-//                        local_newClusters[tid][index6][j] += objects[i+1][j];
-//                        local_newClusters[tid][index7][j] += objects[i+2][j];
-//                        local_newClusters[tid][index8][j] += objects[i+3][j];
+                        if (maks == 7){
+                            local_newClusters[tid][index5][j] += objects[i+4][j];
+                            local_newClusters[tid][index6][j] += objects[i+1][j];
+                            local_newClusters[tid][index7][j] += objects[i+2][j];
+                            local_newClusters[tid][index8][j] += objects[i+3][j];
+                        }
                     }
-//                    index = find_nearest_cluster(numClusters, numCoords,
-//                                                 objects[i], clusters);
-//                    if (membership[i] != index) delta += 1.0;
-//                    membership[i] = index;
-//                    local_newClusterSize[0][index]++;
-//                    for (j=0; j<numCoords; j++)
-//                        local_newClusters[tid][index][j] += objects[i][j];
-//
-//
-//                    index = find_nearest_cluster(numClusters, numCoords,
-//                                                 objects[i+1], clusters);
-//                    if (membership[i+1] != index) delta += 1.0;
-//                    membership[i+1] = index;
-//                    local_newClusterSize[tid][index]++;
-//                    for (j=0; j<numCoords; j++)
-//                        local_newClusters[tid][index][j] += objects[i+1][j];
-//
-//                    index = find_nearest_cluster(numClusters, numCoords,
-//                                                 objects[i+2], clusters);
-//                    if (membership[i+2] != index) delta += 1.0;
-//                    membership[i+2] = index;
-//                    local_newClusterSize[tid][index]++;
-//                    for (j=0; j<numCoords; j++)
-//                        local_newClusters[tid][index][j] += objects[i+2][j];
-//
-//                    index = find_nearest_cluster(numClusters, numCoords,
-//                                                 objects[i+3], clusters);
-//                    if (membership[i+3] != index) delta += 1.0;
-//                    membership[i+3] = index;
-//                    local_newClusterSize[tid][index]++;
-//                    for (j=0; j<numCoords; j++)
-//                        local_newClusters[tid][index][j] += objects[i+3][j];
-
                 }
             } /* end of #pragma omp parallel */
             for (i = ilim; i<numObjs; i++) {
