@@ -22,6 +22,9 @@
 
 #include <omp.h>
 #include "kmeans.h"
+#include "math.h"
+#include <pmmintrin.h>
+
 
 
 /*----< euclid_dist_2() >----------------------------------------------------*/
@@ -31,14 +34,28 @@ float euclid_dist_2(int    numdims,  /* no. dimensions */
                     float *coord1,   /* [numdims] */
                     float *coord2)   /* [numdims] */
 {
-    int i;
+    int i=0;
     float ans=0.0;
+//    float temp[8]={0};
     
-    for (i=0; i<numdims-4; i+=4){
+    for (i=0; i<numdims-3; i+=4){
+//        __m128 c1 = _mm_load_ps(&coord1[i]);
+//        __m128 c2 = _mm_load_ps(&coord2[i]);
+//        __m128 dif = _mm_sub_ps(c1,c2);
+//        __m128 mul = _mm_mul_ps(dif,dif);
+//        _mm_store_ps(temp, mul);
+//        ans += temp[0] + temp[1] + temp[2] + temp[3];
+//        printf("%d\n %f",i,ans);
+
+
         ans += (coord1[i]-coord2[i]) * (coord1[i]-coord2[i]);
         ans += (coord1[i+1]-coord2[i+1]) * (coord1[i+1]-coord2[i+1]);
         ans += (coord1[i+2]-coord2[i+2]) * (coord1[i+2]-coord2[i+2]);
         ans += (coord1[i+3]-coord2[i+3]) * (coord1[i+3]-coord2[i+3]);
+//        ans += (coord1[i+4]-coord2[i+4]) * (coord1[i+4]-coord2[i+4]);
+//        ans += (coord1[i+5]-coord2[i+5]) * (coord1[i+5]-coord2[i+5]);
+//        ans += (coord1[i+6]-coord2[i+6]) * (coord1[i+6]-coord2[i+6]);
+//        ans += (coord1[i+7]-coord2[i+7]) * (coord1[i+7]-coord2[i+7]);
     }
     for (; i<numdims; i++)
         ans += (coord1[i]-coord2[i]) * (coord1[i]-coord2[i]);
@@ -58,7 +75,7 @@ int find_nearest_cluster(int     numClusters, /* no. clusters */
     /* find the cluster id that has min distance to object */
     index    = 0;
     min_dist = euclid_dist_2(numCoords, object, clusters[0]);
-
+    
     dist = euclid_dist_2(numCoords, object, clusters[1]);
     if (dist < min_dist) { /* find the min and its array index */
         min_dist = dist;
@@ -69,40 +86,9 @@ int find_nearest_cluster(int     numClusters, /* no. clusters */
         min_dist = dist;
         index    = 2;
     }
-    
-//    float ans1=0.0,ans2=0.0,ans3=0.0;
-//    int i;
-//
-//    for (i=0; i<numCoords-4; i+=4){
-//        ans1 += (object[i] - clusters[0][i])  *  (object[i]-  clusters[0][i]);
-//        ans1 += (object[i+1]-clusters[0][i+1]) * (object[i+1]-clusters[0][i+1]);
-//        ans1 += (object[i+2]-clusters[0][i+2]) * (object[i+2]-clusters[0][i+2]);
-//        ans1 += (object[i+3]-clusters[0][i+3]) * (object[i+3]-clusters[0][i+3]);
-//
-//        ans2 += (object[i] - clusters[1][i])  *  (object[i]-  clusters[1][i]);
-//        ans2 += (object[i+1]-clusters[1][i+1]) * (object[i+1]-clusters[1][i+1]);
-//        ans2 += (object[i+2]-clusters[1][i+2]) * (object[i+2]-clusters[1][i+2]);
-//        ans2 += (object[i+3]-clusters[1][i+3]) * (object[i+3]-clusters[1][i+3]);
-//
-//        ans3 += (object[i] - clusters[2][i])  *  (object[i]-  clusters[2][i]);
-//        ans3 += (object[i+1]-clusters[2][i+1]) * (object[i+1]-clusters[2][i+1]);
-//        ans3 += (object[i+2]-clusters[2][i+2]) * (object[i+2]-clusters[2][i+2]);
-//        ans3 += (object[i+3]-clusters[2][i+3]) * (object[i+3]-clusters[2][i+3]);
-//
-//    }
-//    for (; i<numCoords; i++){
-//        ans1 += (object[i] - clusters[0][i])  *  (object[i]-  clusters[0][i]);
-//        ans2 += (object[i] - clusters[1][i])  *  (object[i]-  clusters[1][i]);
-//        ans3 += (object[i] - clusters[2][i])  *  (object[i]-  clusters[2][i]);
-//    }
-//
-//    if (ans1<ans2&&ans1<ans3)
-//        return 0;
-//    if (ans2<ans1&&ans2<ans3)
-//        return 1;
-//    return(2);
-    return index;
+    return(index);
 }
+
 
 
 /*----< kmeans_clustering() >------------------------------------------------*/
@@ -117,6 +103,7 @@ float** omp_kmeans(int     is_perform_atomic, /* in: */
 {
     
     int      i, j, k, index, loop=0;
+    int ilim = numObjs-(numObjs&3);
     int     *newClusterSize; /* [numClusters]: no. objects assigned in each
                               new cluster */
     float    delta;          /* % of objects change their clusters */
@@ -127,12 +114,6 @@ float** omp_kmeans(int     is_perform_atomic, /* in: */
     int      nthreads;             /* no. threads */
     int    **local_newClusterSize; /* [nthreads][numClusters] */
     float ***local_newClusters;    /* [nthreads][numClusters][numCoords] */
-    
-    int mask = 4;
-    if (numObjs>10000)
-        mask = 7;
-    int ilim = numObjs-(numObjs&mask);
-
     
     // disable atomic
     is_perform_atomic = 0;
@@ -222,7 +203,7 @@ float** omp_kmeans(int     is_perform_atomic, /* in: */
     if (_debug) timing = omp_get_wtime();
     do {
         delta = 0.0;
-
+        
         if (is_perform_atomic) {
 #pragma omp parallel for \
 private(i,j,index) \
@@ -254,18 +235,16 @@ reduction(+:delta)
 shared(objects,clusters,membership,local_newClusters,local_newClusterSize)
             {
                 int tid = omp_get_thread_num();
-                int index1,index2,index3,index4,index5,index6,index7,index8;
-
 #pragma omp for \
 private(i,j) \
 firstprivate(numObjs,numClusters,numCoords) \
 schedule(static) \
 reduction(+:delta)
                 //firstprivate: Listed variables are initialized according to the value of their original objects prior to entry into the parallel or work-sharing construct.
-                for (i=0; i<ilim; i+=(mask+1)) {
+                for (i=0; i<ilim; i+=4) {
                     /* find the array index of nestest cluster center */
                     int index1 = find_nearest_cluster(numClusters, numCoords,
-                                                 objects[i], clusters);
+                                                      objects[i], clusters);
                     
                     int index2 = find_nearest_cluster(numClusters, numCoords,
                                                       objects[i+1], clusters);
@@ -274,44 +253,18 @@ reduction(+:delta)
                     
                     int index4 = find_nearest_cluster(numClusters, numCoords,
                                                       objects[i+3], clusters);
-
-                    if (mask == 7){
-                        index5 = find_nearest_cluster(numClusters, numCoords,
-                                                          objects[i+4], clusters);
-                        index6 = find_nearest_cluster(numClusters, numCoords,
-                                                          objects[i+5], clusters);
-                        index7 = find_nearest_cluster(numClusters, numCoords,
-                                                          objects[i+6], clusters);
-                        
-                        index8 = find_nearest_cluster(numClusters, numCoords,
-                                                          objects[i+7], clusters);
-                    }
-
+                    
                     /* if membership changes, increase delta by 1 */
                     if (membership[i] != index1) delta += 1.0;
                     if (membership[i+1] != index2) delta += 1.0;
                     if (membership[i+2] != index3) delta += 1.0;
                     if (membership[i+3] != index4) delta += 1.0;
-
-                    if (mask == 7){
-                        if (membership[i+4] != index5) delta += 1.0;
-                        if (membership[i+5] != index6) delta += 1.0;
-                        if (membership[i+6] != index7) delta += 1.0;
-                        if (membership[i+7] != index8) delta += 1.0;
-                    }
                     
                     /* assign the membership to object i */
                     membership[i] = index1;
                     membership[i+1] = index2;
                     membership[i+2] = index3;
                     membership[i+3] = index4;
-
-                    if (mask == 7){
-                        membership[i+4] = index5;
-                        membership[i+5] = index6;
-                        membership[i+6] = index7;
-                        membership[i+7] = index8;
-                    }
                     
                     /* update new cluster centers : sum of all objects located
                      within (average will be performed later) */
@@ -319,27 +272,14 @@ reduction(+:delta)
                     local_newClusterSize[tid][index2]++;
                     local_newClusterSize[tid][index3]++;
                     local_newClusterSize[tid][index4]++;
-
-                    if (mask == 7){
-                        local_newClusterSize[tid][index5]++;
-                        local_newClusterSize[tid][index6]++;
-                        local_newClusterSize[tid][index7]++;
-                        local_newClusterSize[tid][index8]++;
-                    }
                     
                     for (j=0; j<numCoords; j++){
                         local_newClusters[tid][index1][j] += objects[i][j];
                         local_newClusters[tid][index2][j] += objects[i+1][j];
                         local_newClusters[tid][index3][j] += objects[i+2][j];
                         local_newClusters[tid][index4][j] += objects[i+3][j];
-
-                        if (mask == 7){
-                            local_newClusters[tid][index5][j] += objects[i+4][j];
-                            local_newClusters[tid][index6][j] += objects[i+1][j];
-                            local_newClusters[tid][index7][j] += objects[i+2][j];
-                            local_newClusters[tid][index8][j] += objects[i+3][j];
-                        }
                     }
+                    
                 }
             } /* end of #pragma omp parallel */
             for (i = ilim; i<numObjs; i++) {
