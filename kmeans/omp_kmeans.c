@@ -254,13 +254,14 @@ reduction(+:delta)
 shared(objects,clusters,membership,local_newClusters,local_newClusterSize)
             {
                 int tid = omp_get_thread_num();
+                int index1,index2,index3,index4,index5,index6,index7,index8;
+
 #pragma omp for \
 private(i,j) \
 firstprivate(numObjs,numClusters,numCoords) \
 schedule(static) \
 reduction(+:delta)
                 //firstprivate: Listed variables are initialized according to the value of their original objects prior to entry into the parallel or work-sharing construct.
-                int index1,index2,index3,index4,index5,index6,index7,index8;
                 for (i=0; i<ilim; i+=(mask+1)) {
                     /* find the array index of nestest cluster center */
                     int index1 = find_nearest_cluster(numClusters, numCoords,
@@ -292,7 +293,7 @@ reduction(+:delta)
                     if (membership[i+2] != index3) delta += 1.0;
                     if (membership[i+3] != index4) delta += 1.0;
 
-                    if (maks == 7){
+                    if (mask == 7){
                         if (membership[i+4] != index5) delta += 1.0;
                         if (membership[i+5] != index6) delta += 1.0;
                         if (membership[i+6] != index7) delta += 1.0;
@@ -305,7 +306,7 @@ reduction(+:delta)
                     membership[i+2] = index3;
                     membership[i+3] = index4;
 
-                    if (maks == 7){
+                    if (mask == 7){
                         membership[i+4] = index5;
                         membership[i+5] = index6;
                         membership[i+6] = index7;
@@ -319,7 +320,7 @@ reduction(+:delta)
                     local_newClusterSize[tid][index3]++;
                     local_newClusterSize[tid][index4]++;
 
-                    if (maks == 7){
+                    if (mask == 7){
                         local_newClusterSize[tid][index5]++;
                         local_newClusterSize[tid][index6]++;
                         local_newClusterSize[tid][index7]++;
@@ -332,7 +333,7 @@ reduction(+:delta)
                         local_newClusters[tid][index3][j] += objects[i+2][j];
                         local_newClusters[tid][index4][j] += objects[i+3][j];
 
-                        if (maks == 7){
+                        if (mask == 7){
                             local_newClusters[tid][index5][j] += objects[i+4][j];
                             local_newClusters[tid][index6][j] += objects[i+1][j];
                             local_newClusters[tid][index7][j] += objects[i+2][j];
