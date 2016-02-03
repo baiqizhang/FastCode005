@@ -84,16 +84,16 @@ schedule(static)
                 for (unsigned int i = ii; i < ilim; i++){
                     // pre-load A
                     for (k = 0, ind = 0; k < n; k += 4, ind ++) {
-                        t[ind] = _mm_load_ps(&A[i * N + k]);
+                        t[ind] = _mm_load_ps(A + i * N + k);
                     }
                     for (unsigned int j = jj; j < jlim; j++) {
                         // SIMD
                         sum = _mm_setzero_ps();
-                        
+                        float* ptr = B_t+j*N;
                         // mul and sum 4 pairs of float in 4 instructions
                         for (ind = 0, k = 0; k < n; k += 8, ind+=2) {
-                            sum = _mm_add_ps(sum, _mm_mul_ps(t[ind],_mm_load_ps(&B_t[j * N + k]) ));
-                            sum = _mm_add_ps(sum, _mm_mul_ps(t[ind+1],_mm_load_ps(&B_t[j * N + k+4]) ));
+                            sum = _mm_add_ps(sum, _mm_mul_ps(t[ind],_mm_load_ps(ptr + k) ));
+                            sum = _mm_add_ps(sum, _mm_mul_ps(t[ind+1],_mm_load_ps(ptr + k+4) ));
                         }
                         // store __m128 to float array, sum up and save
                         _mm_store_ps(temp, sum);
