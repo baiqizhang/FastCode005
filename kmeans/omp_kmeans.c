@@ -269,7 +269,7 @@ reduction(+:delta)
                     int index4 = find_nearest_cluster(numClusters, numCoords,
                                                       objects[i+3], clusters);
 
-                    if (maks == 7){
+//                    if (maks == 7){
                         int index5 = find_nearest_cluster(numClusters, numCoords,
                                                           objects[i+4], clusters);
                         int index6 = find_nearest_cluster(numClusters, numCoords,
@@ -279,7 +279,7 @@ reduction(+:delta)
                         
                         int index8 = find_nearest_cluster(numClusters, numCoords,
                                                           objects[i+7], clusters);
-                    }
+//                    }
 
                     /* if membership changes, increase delta by 1 */
                     if (membership[i] != index1) delta += 1.0;
