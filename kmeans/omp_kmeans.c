@@ -117,8 +117,6 @@ float** omp_kmeans(int     is_perform_atomic, /* in: */
 {
     
     int      i, j, k, index, loop=0;
-    int mask = 7;
-    int ilim = numObjs-(numObjs&mask);
     int     *newClusterSize; /* [numClusters]: no. objects assigned in each
                               new cluster */
     float    delta;          /* % of objects change their clusters */
@@ -129,6 +127,12 @@ float** omp_kmeans(int     is_perform_atomic, /* in: */
     int      nthreads;             /* no. threads */
     int    **local_newClusterSize; /* [nthreads][numClusters] */
     float ***local_newClusters;    /* [nthreads][numClusters][numCoords] */
+    
+    int mask = 4;
+    if (numObjs>10000)
+        mask = 7;
+    int ilim = numObjs-(numObjs&mask);
+
     
     // disable atomic
     is_perform_atomic = 0;
@@ -256,6 +260,7 @@ firstprivate(numObjs,numClusters,numCoords) \
 schedule(static) \
 reduction(+:delta)
                 //firstprivate: Listed variables are initialized according to the value of their original objects prior to entry into the parallel or work-sharing construct.
+                int index1,index2,index3,index4,index5,index6,index7,index8;
                 for (i=0; i<ilim; i+=(mask+1)) {
                     /* find the array index of nestest cluster center */
                     int index1 = find_nearest_cluster(numClusters, numCoords,
@@ -269,17 +274,17 @@ reduction(+:delta)
                     int index4 = find_nearest_cluster(numClusters, numCoords,
                                                       objects[i+3], clusters);
 
-//                    if (maks == 7){
-                        int index5 = find_nearest_cluster(numClusters, numCoords,
+                    if (maks == 7){
+                        index5 = find_nearest_cluster(numClusters, numCoords,
                                                           objects[i+4], clusters);
-                        int index6 = find_nearest_cluster(numClusters, numCoords,
+                        index6 = find_nearest_cluster(numClusters, numCoords,
                                                           objects[i+5], clusters);
-                        int index7 = find_nearest_cluster(numClusters, numCoords,
+                        index7 = find_nearest_cluster(numClusters, numCoords,
                                                           objects[i+6], clusters);
                         
-                        int index8 = find_nearest_cluster(numClusters, numCoords,
+                        index8 = find_nearest_cluster(numClusters, numCoords,
                                                           objects[i+7], clusters);
-//                    }
+                    }
 
                     /* if membership changes, increase delta by 1 */
                     if (membership[i] != index1) delta += 1.0;
