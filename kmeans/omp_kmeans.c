@@ -58,19 +58,18 @@ int find_nearest_cluster(int     numClusters, /* no. clusters */
     /* find the cluster id that has min distance to object */
     index    = 0;
     min_dist = euclid_dist_2(numCoords, object, clusters[0]);
-//    for (j=0; j<numCoords; j++)
-//        min_dist += (object[j]-clusters[0][j]) * (object[j]-clusters[0][j]);
-    
-    for (i=1; i<numClusters; i++) {
-        dist = euclid_dist_2(numCoords, object, clusters[i]);
-//        for (j=0; j<numCoords; j++)
-//            dist += (object[j]-clusters[i][j]) * (object[j]-clusters[i][j]);
-        /* no need square root */
-        if (dist < min_dist) { /* find the min and its array index */
-            min_dist = dist;
-            index    = i;
-        }
+
+    dist = euclid_dist_2(numCoords, object, clusters[1]);
+    if (dist < min_dist) { /* find the min and its array index */
+        min_dist = dist;
+        index    = 1;
     }
+    dist = euclid_dist_2(numCoords, object, clusters[2]);
+    if (dist < min_dist) { /* find the min and its array index */
+        min_dist = dist;
+        index    = 2;
+    }
+
     return(index);
 }
 
@@ -128,6 +127,7 @@ float** omp_kmeans(int     is_perform_atomic, /* in: */
     
     /* initialize membership[] */
     // loop unrolling - added by Vincent
+#pragma omp parallel for
     for (i=0; i<numObjs-3; i += 4) {
         membership[i] = -1;
         membership[i+1] = -1;
@@ -187,33 +187,33 @@ float** omp_kmeans(int     is_perform_atomic, /* in: */
     do {
         delta = 0.0;
 
-//        if (is_perform_atomic) {
-//#pragma omp parallel for \
-//private(i,j,index) \
-//firstprivate(numObjs,numClusters,numCoords) \
-//shared(objects,clusters,membership,newClusters,newClusterSize) \
-//schedule(static) \
-//reduction(+:delta)
-//            for (i=0; i<numObjs; i++) {
-//                /* find the array index of nestest cluster center */
-//                index = find_nearest_cluster(numClusters, numCoords, objects[i],
-//                                             clusters);
-//                
-//                /* if membership changes, increase delta by 1 */
-//                if (membership[i] != index) delta += 1.0;
-//                
-//                /* assign the membership to object i */
-//                membership[i] = index;
-//                
-//                /* update new cluster centers : sum of objects located within */
-//#pragma omp atomic
-//                newClusterSize[index]++;
-//                for (j=0; j<numCoords; j++)
-//#pragma omp atomic
-//                    newClusters[index][j] += objects[i][j];
-//            }
-//        }
-//        else {
+        if (is_perform_atomic) {
+#pragma omp parallel for \
+private(i,j,index) \
+firstprivate(numObjs,numClusters,numCoords) \
+shared(objects,clusters,membership,newClusters,newClusterSize) \
+schedule(static) \
+reduction(+:delta)
+            for (i=0; i<numObjs; i++) {
+                /* find the array index of nestest cluster center */
+                index = find_nearest_cluster(numClusters, numCoords, objects[i],
+                                             clusters);
+                
+                /* if membership changes, increase delta by 1 */
+                if (membership[i] != index) delta += 1.0;
+                
+                /* assign the membership to object i */
+                membership[i] = index;
+                
+                /* update new cluster centers : sum of objects located within */
+#pragma omp atomic
+                newClusterSize[index]++;
+                for (j=0; j<numCoords; j++)
+#pragma omp atomic
+                    newClusters[index][j] += objects[i][j];
+            }
+        }
+        else {
 #pragma omp parallel \
 shared(objects,clusters,membership,local_newClusters,local_newClusterSize)
             {
@@ -293,7 +293,7 @@ reduction(+:delta)
                     }
                 }
             }
-//        }
+        }
         
         /* average the sum and replace old cluster centers with newClusters */
         for (i=0; i<numClusters; i++) {
