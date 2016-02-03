@@ -38,15 +38,15 @@ float euclid_dist_2(int    numdims,  /* no. dimensions */
     float ans=0.0;
     //    float temp[8]={0};
     
-    for (i=0; i<numdims-7; i+=8){
+    for (i=0; i<numdims-3; i+=4){
         ans += (coord1[i]-coord2[i]) * (coord1[i]-coord2[i]);
         ans += (coord1[i+1]-coord2[i+1]) * (coord1[i+1]-coord2[i+1]);
         ans += (coord1[i+2]-coord2[i+2]) * (coord1[i+2]-coord2[i+2]);
         ans += (coord1[i+3]-coord2[i+3]) * (coord1[i+3]-coord2[i+3]);
-        ans += (coord1[i+4]-coord2[i+4]) * (coord1[i+4]-coord2[i+4]);
-        ans += (coord1[i+5]-coord2[i+5]) * (coord1[i+5]-coord2[i+5]);
-        ans += (coord1[i+6]-coord2[i+6]) * (coord1[i+6]-coord2[i+6]);
-        ans += (coord1[i+7]-coord2[i+7]) * (coord1[i+7]-coord2[i+7]);
+//        ans += (coord1[i+4]-coord2[i+4]) * (coord1[i+4]-coord2[i+4]);
+//        ans += (coord1[i+5]-coord2[i+5]) * (coord1[i+5]-coord2[i+5]);
+//        ans += (coord1[i+6]-coord2[i+6]) * (coord1[i+6]-coord2[i+6]);
+//        ans += (coord1[i+7]-coord2[i+7]) * (coord1[i+7]-coord2[i+7]);
     }
     for (; i<numdims; i++)
         ans += (coord1[i]-coord2[i]) * (coord1[i]-coord2[i]);
