@@ -274,7 +274,7 @@ reduction(+:delta)
                     int index4 = find_nearest_cluster(numClusters, numCoords,
                                                       objects[i+3], clusters);
 
-                    if (maks == 7){
+                    if (mask == 7){
                         index5 = find_nearest_cluster(numClusters, numCoords,
                                                           objects[i+4], clusters);
                         index6 = find_nearest_cluster(numClusters, numCoords,
