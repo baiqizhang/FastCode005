@@ -243,7 +243,6 @@ shared(objects,clusters,membership,local_newClusters,local_newClusterSize)
                 int tid = omp_get_thread_num();
 #pragma omp for \
 private(i,j) \
-firstprivate(numObjs,numClusters,numCoords) \
 schedule(static) \
 reduction(+:delta2)
                 //                //firstprivate: Listed variables are initialized according to the value of their original objects prior to entry into the parallel or work-sharing construct.
@@ -306,14 +305,12 @@ reduction(+:delta2)
                     local_newClusterSize[tid][index3]++;
                     local_newClusterSize[tid][index4]++;
                     
-                    for (j=0; j<numCoords; j++)
+                    for (j=0; j<numCoords; j++){
                         local_newClusters[tid][index1][j] += objects[i][j];
-                    for (j=0; j<numCoords; j++)
                         local_newClusters[tid][index2][j] += objects[i+1][j];
-                    for (j=0; j<numCoords; j++)
                         local_newClusters[tid][index3][j] += objects[i+2][j];
-                    for (j=0; j<numCoords; j++)
                         local_newClusters[tid][index4][j] += objects[i+3][j];
+                    }
                 }
             } /* end of #pragma omp parallel */
             for (i = ilim; i<numObjs; i++) {
