@@ -48,6 +48,24 @@ float euclid_dist_2(int    numdims,  /* no. dimensions */
         ans += (coord1[i]-coord2[i]) * (coord1[i]-coord2[i]);
     return(ans);
 }
+__inline static
+float euclid_dist_8(int    numdims,  /* no. dimensions */
+                    float *coord1,   /* [numdims] */
+                    float *coord2)   /* [numdims] */
+{
+    float ans=0.0;
+    
+    ans += (coord1[0]-coord2[0]) * (coord1[0]-coord2[0]);
+    ans += (coord1[1]-coord2[1]) * (coord1[1]-coord2[1]);
+    ans += (coord1[2]-coord2[2]) * (coord1[2]-coord2[2]);
+    ans += (coord1[3]-coord2[3]) * (coord1[3]-coord2[3]);
+    ans += (coord1[4]-coord2[4]) * (coord1[4]-coord2[4]);
+    ans += (coord1[5]-coord2[5]) * (coord1[5]-coord2[5]);
+    ans += (coord1[6]-coord2[6]) * (coord1[6]-coord2[6]);
+    ans += (coord1[7]-coord2[7]) * (coord1[7]-coord2[7]);
+
+    return(ans);
+}
 
 /*----< find_nearest_cluster() >---------------------------------------------*/
 __inline static
@@ -69,6 +87,34 @@ int find_nearest_cluster(int     numClusters, /* no. clusters */
         index    = 1;
     }
     dist = euclid_dist_2(numCoords, object, clusters[2]);
+    if (dist < min_dist) { /* find the min and its array index */
+        min_dist = dist;
+        index    = 2;
+    }
+    return(index);
+}
+
+
+/*----< find_nearest_cluster() >---------------------------------------------*/
+__inline static
+int find_nearest_cluster_8(int     numClusters, /* no. clusters */
+                         int     numCoords,   /* no. coordinates */
+                         float  *object,      /* [numCoords] */
+                         float **clusters)    /* [numClusters][numCoords] */
+{
+    int   index, i, j;
+    float dist, min_dist;
+    
+    /* find the cluster id that has min distance to object */
+    index    = 0;
+    min_dist = euclid_dist_8(numCoords, object, clusters[0]);
+    
+    dist = euclid_dist_8(numCoords, object, clusters[1]);
+    if (dist < min_dist) { /* find the min and its array index */
+        min_dist = dist;
+        index    = 1;
+    }
+    dist = euclid_dist_8(numCoords, object, clusters[2]);
     if (dist < min_dist) { /* find the min and its array index */
         min_dist = dist;
         index    = 2;
@@ -223,8 +269,67 @@ reduction(+:delta)
             }
         }
         else {
+            if (numCoords == 8 ){
+                
+                
 #pragma omp parallel \
-shared(objects,clusters,membership,local_newClusters,local_newClusterSize,index)
+shared(objects,clusters,membership,local_newClusters,local_newClusterSize)
+                {
+                    int tid = omp_get_thread_num();
+#pragma omp for \
+private(i,j) \
+firstprivate(numObjs,numClusters,numCoords) \
+schedule(static) \
+reduction(+:delta2)
+                    //firstprivate: Listed variables are initialized according to the value of their original objects prior to entry into the parallel or work-sharing construct.
+                    for (i=0; i<ilim; i+=4) {
+                        /* find the array index of nestest cluster center */
+                        //n*k*d
+                        int index1 = find_nearest_cluster_8(numClusters, numCoords,
+                                                          objects[i], clusters);
+                        
+                        int index2 = find_nearest_cluster_8(numClusters, numCoords,
+                                                          objects[i+1], clusters);
+                        int index3 = find_nearest_cluster_8(numClusters, numCoords,
+                                                          objects[i+2], clusters);
+                        
+                        int index4 = find_nearest_cluster_8(numClusters, numCoords,
+                                                          objects[i+3], clusters);
+                        
+                        if (membership[i] != index1) delta2 ++;
+                        if (membership[i+1] != index2) delta2 ++;
+                        if (membership[i+2] != index3) delta2 ++;
+                        if (membership[i+3] != index4) delta2 ++;
+                        
+                        /* assign the membership to object i */
+                        membership[i] = index1;
+                        membership[i+1] = index2;
+                        membership[i+2] = index3;
+                        membership[i+3] = index4;
+                        
+                        /* update new cluster centers : sum of all objects located
+                         within (average will be performed later) */
+                        local_newClusterSize[tid][index1]++;
+                        local_newClusterSize[tid][index2]++;
+                        local_newClusterSize[tid][index3]++;
+                        local_newClusterSize[tid][index4]++;
+                        
+                        //n*d
+                        for (j=0; j<numCoords; j++){
+                            local_newClusters[tid][index1][j] += objects[i][j];
+                            local_newClusters[tid][index2][j] += objects[i+1][j];
+                            local_newClusters[tid][index3][j] += objects[i+2][j];
+                            local_newClusters[tid][index4][j] += objects[i+3][j];
+                        }
+                    }
+                } /* end of #pragma omp parallel */
+            
+            } else {
+            
+            
+            
+#pragma omp parallel \
+shared(objects,clusters,membership,local_newClusters,local_newClusterSize)
             {
                 int tid = omp_get_thread_num();
 #pragma omp for \
@@ -232,7 +337,6 @@ private(i,j) \
 firstprivate(numObjs,numClusters,numCoords) \
 schedule(static) \
 reduction(+:delta2)
-                
                 //firstprivate: Listed variables are initialized according to the value of their original objects prior to entry into the parallel or work-sharing construct.
                 for (i=0; i<ilim; i+=4) {
                     /* find the array index of nestest cluster center */
@@ -275,6 +379,9 @@ reduction(+:delta2)
                     }
                 }
             } /* end of #pragma omp parallel */
+                
+                
+            }
             for (i = ilim; i<numObjs; i++) {
                 /* find the array index of nestest cluster center */
                 index = find_nearest_cluster(numClusters, numCoords,
