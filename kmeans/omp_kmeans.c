@@ -22,9 +22,6 @@
 
 #include <omp.h>
 #include "kmeans.h"
-#include "math.h"
-#include <pmmintrin.h>
-
 
 
 /*----< euclid_dist_2() >----------------------------------------------------*/
@@ -34,28 +31,14 @@ float euclid_dist_2(int    numdims,  /* no. dimensions */
                     float *coord1,   /* [numdims] */
                     float *coord2)   /* [numdims] */
 {
-    int i=0;
+    int i;
     float ans=0.0;
-    //    float temp[8]={0};
     
-    for (i=0; i<numdims-3; i+=4){
-        //        __m128 c1 = _mm_load_ps(&coord1[i]);
-        //        __m128 c2 = _mm_load_ps(&coord2[i]);
-        //        __m128 dif = _mm_sub_ps(c1,c2);
-        //        __m128 mul = _mm_mul_ps(dif,dif);
-        //        _mm_store_ps(temp, mul);
-        //        ans += temp[0] + temp[1] + temp[2] + temp[3];
-        //        printf("%d\n %f",i,ans);
-        
-        
+    for (i=0; i<numdims-4; i+=4){
         ans += (coord1[i]-coord2[i]) * (coord1[i]-coord2[i]);
         ans += (coord1[i+1]-coord2[i+1]) * (coord1[i+1]-coord2[i+1]);
         ans += (coord1[i+2]-coord2[i+2]) * (coord1[i+2]-coord2[i+2]);
         ans += (coord1[i+3]-coord2[i+3]) * (coord1[i+3]-coord2[i+3]);
-        //        ans += (coord1[i+4]-coord2[i+4]) * (coord1[i+4]-coord2[i+4]);
-        //        ans += (coord1[i+5]-coord2[i+5]) * (coord1[i+5]-coord2[i+5]);
-        //        ans += (coord1[i+6]-coord2[i+6]) * (coord1[i+6]-coord2[i+6]);
-        //        ans += (coord1[i+7]-coord2[i+7]) * (coord1[i+7]-coord2[i+7]);
     }
     for (; i<numdims; i++)
         ans += (coord1[i]-coord2[i]) * (coord1[i]-coord2[i]);
@@ -75,20 +58,21 @@ int find_nearest_cluster(int     numClusters, /* no. clusters */
     /* find the cluster id that has min distance to object */
     index    = 0;
     min_dist = euclid_dist_2(numCoords, object, clusters[0]);
+    //    for (j=0; j<numCoords; j++)
+    //        min_dist += (object[j]-clusters[0][j]) * (object[j]-clusters[0][j]);
     
-    dist = euclid_dist_2(numCoords, object, clusters[1]);
-    if (dist < min_dist) { /* find the min and its array index */
-        min_dist = dist;
-        index    = 1;
-    }
-    dist = euclid_dist_2(numCoords, object, clusters[2]);
-    if (dist < min_dist) { /* find the min and its array index */
-        min_dist = dist;
-        index    = 2;
+    for (i=1; i<numClusters; i++) {
+        dist = euclid_dist_2(numCoords, object, clusters[i]);
+        //        for (j=0; j<numCoords; j++)
+        //            dist += (object[j]-clusters[i][j]) * (object[j]-clusters[i][j]);
+        /* no need square root */
+        if (dist < min_dist) { /* find the min and its array index */
+            min_dist = dist;
+            index    = i;
+        }
     }
     return(index);
 }
-
 
 
 /*----< kmeans_clustering() >------------------------------------------------*/
@@ -107,7 +91,6 @@ float** omp_kmeans(int     is_perform_atomic, /* in: */
     int     *newClusterSize; /* [numClusters]: no. objects assigned in each
                               new cluster */
     float    delta;          /* % of objects change their clusters */
-    int delta2;
     float  **clusters;       /* out: [numClusters][numCoords] */
     float  **newClusters;    /* [numClusters][numCoords] */
     double   timing;
@@ -201,14 +184,9 @@ float** omp_kmeans(int     is_perform_atomic, /* in: */
         }
     }
     
-    //    int deltas[20] = {0};
-    
     if (_debug) timing = omp_get_wtime();
     do {
         delta = 0.0;
-        delta2 = 0;
-        //        for (int kk = 0 ; kk<20;kk++)
-        //            deltas[kk]=0;
         
         if (is_perform_atomic) {
 #pragma omp parallel for \
@@ -245,30 +223,7 @@ shared(objects,clusters,membership,local_newClusters,local_newClusterSize)
 private(i,j) \
 firstprivate(numObjs,numClusters,numCoords) \
 schedule(static) \
-reduction(+:delta2)
-                //                //firstprivate: Listed variables are initialized according to the value of their original objects prior to entry into the parallel or work-sharing construct.
-                //                for (i=0; i<numObjs; i++) {
-                //                    /* find the array index of nestest cluster center */
-                //                    index = find_nearest_cluster(numClusters, numCoords,
-                //                                                 objects[i], clusters);
-                //
-                //                    /* if membership changes, increase delta by 1 */
-                //                    if (membership[i] != index) delta += 1.0;
-                //
-                //                    /* assign the membership to object i */
-                //                    membership[i] = index;
-                //
-                //                    /* update new cluster centers : sum of all objects located
-                //                     within (average will be performed later) */
-                //                    local_newClusterSize[tid][index]++;
-                //                    for (j=0; j<numCoords-3; j+=4){
-                //                        local_newClusters[tid][index][j] += objects[i][j];
-                //                        local_newClusters[tid][index][j+1] += objects[i][j+1];
-                //                        local_newClusters[tid][index][j+2] += objects[i][j+2];
-                //                        local_newClusters[tid][index][j+3] += objects[i][j+3];
-                //                    }
-                //                }
-                
+reduction(+:delta)
                 //firstprivate: Listed variables are initialized according to the value of their original objects prior to entry into the parallel or work-sharing construct.
                 for (i=0; i<ilim; i+=4) {
                     /* find the array index of nestest cluster center */
@@ -284,14 +239,10 @@ reduction(+:delta2)
                                                       objects[i+3], clusters);
                     
                     /* if membership changes, increase delta by 1 */
-                    //                    if (membership[i] != index1) delta += 1.0;
-                    //                    if (membership[i+1] != index2) delta += 1.0;
-                    //                    if (membership[i+2] != index3) delta += 1.0;
-                    //                    if (membership[i+3] != index4) delta += 1.0;
-                    if (membership[i] != index1) delta2 ++;
-                    if (membership[i+1] != index2) delta2 ++;
-                    if (membership[i+2] != index3) delta2 ++;
-                    if (membership[i+3] != index4) delta2 ++;
+                    if (membership[i] != index1) delta += 1.0;
+                    if (membership[i+1] != index2) delta += 1.0;
+                    if (membership[i+2] != index3) delta += 1.0;
+                    if (membership[i+3] != index4) delta += 1.0;
                     
                     /* assign the membership to object i */
                     membership[i] = index1;
@@ -312,6 +263,7 @@ reduction(+:delta2)
                         local_newClusters[tid][index3][j] += objects[i+2][j];
                         local_newClusters[tid][index4][j] += objects[i+3][j];
                     }
+                    
                 }
             } /* end of #pragma omp parallel */
             for (i = ilim; i<numObjs; i++) {
@@ -320,7 +272,7 @@ reduction(+:delta2)
                                              objects[i], clusters);
                 
                 /* if membership changes, increase delta by 1 */
-                if (membership[i] != index) delta2 ++;
+                if (membership[i] != index) delta += 1.0;
                 
                 /* assign the membership to object i */
                 membership[i] = index;
@@ -354,8 +306,8 @@ reduction(+:delta2)
             newClusterSize[i] = 0;   /* set back to 0 */
         }
         
-        //        delta /= numObjs;
-    } while (delta2 > threshold*numObjs && loop++ < 500);
+        delta /= numObjs;
+    } while (delta > threshold && loop++ < 500);
     
     if (_debug) {
         timing = omp_get_wtime() - timing;
