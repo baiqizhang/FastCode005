@@ -23,9 +23,6 @@
 #include <immintrin.h>
 #include <pmmintrin.h>
 
-__m128 t[1000];
-__m128 preload_B[1000][250];
-
 
 namespace omp
 {
@@ -74,15 +71,10 @@ namespace omp
         
         // Matrix Mul
         float temp[8], result;
+        __m128 t[1000];
         __m128 sum;
         unsigned int ind;
         unsigned int step = 12;
-        
-        // pre-load B
-        for (unsigned int i = 0; i < n; i++)
-            for (k = 0, ind = 0; k < n; k += 4, ind ++) {
-                preload_B[i][ind] = _mm_load_ps(&B_t[i * N + k]);
-            }
         
 #pragma omp parallel for \
 private(k,ind,sum,t,temp,result) \
@@ -103,8 +95,7 @@ schedule(static)
                         
                         // mul and sum 4 pairs of float in 4 instructions
                         for (ind = 0, k = 0; k < n; k += 4, ind++) {
-//                            sum = _mm_add_ps(sum, _mm_mul_ps(t[ind],_mm_load_ps(&B_t[j * N + k]) ));
-                            sum = _mm_add_ps(sum, _mm_mul_ps(t[ind],preload_B[j][ind] ));
+                            sum = _mm_add_ps(sum, _mm_mul_ps(t[ind],_mm_load_ps(&B_t[j * N + k]) ));
                         }
                         // store __m128 to float array, sum up and save
                         _mm_store_ps(temp, sum);
