@@ -23,8 +23,6 @@
 #include <immintrin.h>
 #include <pmmintrin.h>
 
-__m128 t[1010];
-__m128 preload[1010][260];
 
 namespace omp
 {
@@ -52,8 +50,8 @@ namespace omp
         }
         
         // if n is not multiple of 4, create padding. N = n + 4 - (n&3). O(N^2)
-        if ((n & 3) != 0){
-            N = n - (n&3) + 4;
+        if ((n & 7) != 0){
+            N = n - (n&7) + 8;
             A = (float*)calloc(N*N, sizeof(float)); // filled with 0
         } else {
             N = n;
@@ -73,14 +71,10 @@ namespace omp
         
         // Matrix Mul
         float temp[8], result;
+        __m128 t[1000];
         __m128 sum;
         unsigned int ind;
         unsigned int step = 12;
-        
-        for (i = 0; i < n; i++)
-            for (k = 0, ind = 0; k < n; k += 4, ind ++) {
-                preload[i][ind] = _mm_load_ps(&B_t[i * N + k]);
-            }
         
 #pragma omp parallel for \
 private(k,ind,sum,t,temp,result) \
@@ -100,8 +94,9 @@ schedule(static)
                         sum = _mm_setzero_ps();
                         
                         // mul and sum 4 pairs of float in 4 instructions
-                        for (ind = 0, k = 0; k < n; k += 4, ind++) {
-                            sum = _mm_add_ps(sum, _mm_mul_ps(t[ind],preload[j][ind] ));
+                        for (ind = 0, k = 0; k < n; k += 8, ind+=2) {
+                            sum = _mm_add_ps(sum, _mm_mul_ps(t[ind],_mm_load_ps(&B_t[j * N + k]) ));
+                            sum = _mm_add_ps(sum, _mm_mul_ps(t[ind+1],_mm_load_ps(&B_t[j * N + k+4]) ));
                         }
                         // store __m128 to float array, sum up and save
                         _mm_store_ps(temp, sum);
