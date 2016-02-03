@@ -315,12 +315,45 @@ reduction(+:delta2)
                         local_newClusterSize[tid][index4]++;
                         
                         //n*d
-                        for (j=0; j<numCoords; j++){
-                            local_newClusters[tid][index1][j] += objects[i][j];
-                            local_newClusters[tid][index2][j] += objects[i+1][j];
-                            local_newClusters[tid][index3][j] += objects[i+2][j];
-                            local_newClusters[tid][index4][j] += objects[i+3][j];
-                        }
+                        local_newClusters[tid][index1][0] += objects[i][0];
+                        local_newClusters[tid][index2][0] += objects[i+1][0];
+                        local_newClusters[tid][index3][0] += objects[i+2][0];
+                        local_newClusters[tid][index4][0] += objects[i+3][0];
+
+                        local_newClusters[tid][index1][1] += objects[i][1];
+                        local_newClusters[tid][index2][1] += objects[i+1][1];
+                        local_newClusters[tid][index3][1] += objects[i+2][1];
+                        local_newClusters[tid][index4][1] += objects[i+3][1];
+
+                        local_newClusters[tid][index1][2] += objects[i][2];
+                        local_newClusters[tid][index2][2] += objects[i+1][2];
+                        local_newClusters[tid][index3][2] += objects[i+2][2];
+                        local_newClusters[tid][index4][2] += objects[i+3][2];
+
+                        local_newClusters[tid][index1][3] += objects[i][3];
+                        local_newClusters[tid][index2][3] += objects[i+1][3];
+                        local_newClusters[tid][index3][3] += objects[i+2][3];
+                        local_newClusters[tid][index4][3] += objects[i+3][3];
+
+                        local_newClusters[tid][index1][4] += objects[i][4];
+                        local_newClusters[tid][index2][4] += objects[i+1][4];
+                        local_newClusters[tid][index3][4] += objects[i+2][4];
+                        local_newClusters[tid][index4][4] += objects[i+3][4];
+
+                        local_newClusters[tid][index1][5] += objects[i][5];
+                        local_newClusters[tid][index2][5] += objects[i+1][5];
+                        local_newClusters[tid][index3][5] += objects[i+2][5];
+                        local_newClusters[tid][index4][5] += objects[i+3][5];
+
+                        local_newClusters[tid][index1][6] += objects[i][6];
+                        local_newClusters[tid][index2][6] += objects[i+1][6];
+                        local_newClusters[tid][index3][6] += objects[i+2][6];
+                        local_newClusters[tid][index4][6] += objects[i+3][6];
+                        
+                        local_newClusters[tid][index1][7] += objects[i][7];
+                        local_newClusters[tid][index2][7] += objects[i+1][7];
+                        local_newClusters[tid][index3][7] += objects[i+2][7];
+                        local_newClusters[tid][index4][7] += objects[i+3][7];
                     }
                 } /* end of #pragma omp parallel */
             
