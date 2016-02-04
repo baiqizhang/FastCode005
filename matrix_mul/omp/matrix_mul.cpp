@@ -23,7 +23,7 @@
 #include <immintrin.h>
 #include <pmmintrin.h>
 
-
+// Team 005
 namespace omp
 {
     void
