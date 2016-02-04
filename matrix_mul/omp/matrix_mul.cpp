@@ -34,11 +34,11 @@ namespace omp
         unsigned int n = sq_dimension, N;
         unsigned int i, j, k;
         
-        if (n<30){
+        if (n<50){
             for (unsigned int i = 0; i < sq_dimension; i++)
                 for(unsigned int j = 0; j < sq_dimension; j++)
                     sq_matrix_result[i*sq_dimension + j] = 0;
-
+            
             for (unsigned int i = 0; i < sq_dimension; i++)
                 for (unsigned int k = 0; k < sq_dimension; k++)
                     for(unsigned int j = 0; j < sq_dimension; j++)
@@ -47,8 +47,8 @@ namespace omp
         }
         
         // if n is not multiple of 4, create padding. N = n + 4 - (n&3). O(N^2)
-        if ((n & 7) != 0){
-            N = n - (n & 7) + 8;
+        if ((n & 3) != 0){
+            N = n - (n & 3) + 4;
             A = (float*)calloc(N*N, sizeof(float)); // filled with 0
         } else {
             N = n;
@@ -58,8 +58,7 @@ namespace omp
         //transpose B
         B_t = (float*)calloc(N*N, sizeof(float));
 #pragma omp parallel for \
-        shared(A,B_t,sq_matrix_1,sq_matrix_2) \
-        private(i,j)
+shared(A,B_t,sq_matrix_1,sq_matrix_2)
         for (i = 0; i < n; i++)
             for(j = 0; j < n; j++){
                 if (N != n) //n is not mul of 4, fill A
@@ -84,18 +83,17 @@ schedule(static)
                 unsigned int jlim = jj+step>=n?n:jj+step;
                 for (unsigned int i = ii; i < ilim; i++){
                     // pre-load A
-                    for (k = 0, ind = 0; k < n; k += 8, ind +=2){
+                    for (k = 0, ind = 0; k < n; k += 4, ind ++)
                         t[ind] = _mm_load_ps(A + i * N + k);
-                        t[ind+1] = _mm_load_ps(A + i * N + k + 4);
-                    }
+                    //                        t[ind+1] = _mm_load_ps(A + i * N + k + 4);
+                    //                    }
                     for (unsigned int j = jj; j < jlim; j++) {
                         // SIMD
                         sum = _mm_setzero_ps();
                         float* ptr = B_t+j*N;
                         // mul and sum 4 pairs of float in 4 instructions
-                        for (ind = 0, k = 0; k < n; k += 8, ind+=2) {
+                        for (ind = 0, k = 0; k < n; k += 4, ind++) {
                             sum = _mm_add_ps(sum, _mm_mul_ps(t[ind],_mm_load_ps(ptr + k) ));
-                            sum = _mm_add_ps(sum, _mm_mul_ps(t[ind+1],_mm_load_ps(ptr + k + 4) ));
                         }
                         // store __m128 to float array, sum up and save
                         _mm_store_ps(temp, sum);
