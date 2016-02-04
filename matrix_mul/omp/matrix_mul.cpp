@@ -71,7 +71,7 @@ namespace omp
         __m128 t[1000];
         __m128 sum;
         unsigned int ind;
-        unsigned int step = 13;
+        unsigned int step = 9;
         
 #pragma omp parallel for \
 private(k,ind,sum,t,temp,result) \
