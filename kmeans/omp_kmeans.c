@@ -178,11 +178,15 @@ float** omp_kmeans(int     is_perform_atomic, /* in: */
     // loop unrolling - added by Vincent
 
 #pragma omp parallel for shared(membership)
-    for (i=0; i<numObjs-3; i += 4) {
+    for (i=0; i<numObjs-3; i += 8) {
         membership[i] = -1;
         membership[i+1] = -1;
         membership[i+2] = -1;
         membership[i+3] = -1;
+        membership[i+4] = -1;
+        membership[i+5] = -1;
+        membership[i+6] = -1;
+        membership[i+7] = -1;
     }
     for (j = i; j < numObjs; j++) membership[j] = -1;
     
