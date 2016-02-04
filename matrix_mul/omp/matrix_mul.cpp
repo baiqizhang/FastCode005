@@ -47,8 +47,8 @@ namespace omp
         }
         
         // if n is not multiple of 4, create padding. N = n + 4 - (n&3). O(N^2)
-        if ((n & 7) != 0){
-            N = n - (n&7) + 8;
+        if ((n & 15) != 0){
+            N = n - (n&15) + 8;
             A = (float*)calloc(N*N, sizeof(float)); // filled with 0
         } else {
             N = n;
@@ -91,9 +91,11 @@ schedule(static)
                         sum = _mm_setzero_ps();
                         float* ptr = B_t+j*N;
                         // mul and sum 4 pairs of float in 4 instructions
-                        for (ind = 0, k = 0; k < n; k += 8, ind+=2) {
+                        for (ind = 0, k = 0; k < n; k += 16, ind+=4) {
                             sum = _mm_add_ps(sum, _mm_mul_ps(t[ind],_mm_load_ps(ptr + k) ));
                             sum = _mm_add_ps(sum, _mm_mul_ps(t[ind+1],_mm_load_ps(ptr + k+4) ));
+                            sum = _mm_add_ps(sum, _mm_mul_ps(t[ind+2],_mm_load_ps(ptr + k+8) ));
+                            sum = _mm_add_ps(sum, _mm_mul_ps(t[ind+3],_mm_load_ps(ptr + k+12) ));
                         }
                         // store __m128 to float array, sum up and save
                         _mm_store_ps(temp, sum);
