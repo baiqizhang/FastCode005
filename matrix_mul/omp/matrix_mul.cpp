@@ -48,7 +48,7 @@ namespace omp
         
         // if n is not multiple of 4, create padding. N = n + 4 - (n&3). O(N^2)
         if ((n & 15) != 0){
-            N = n - (n&15) + 8;
+            N = n - (n&15) + 16;
             A = (float*)calloc(N*N, sizeof(float)); // filled with 0
         } else {
             N = n;
