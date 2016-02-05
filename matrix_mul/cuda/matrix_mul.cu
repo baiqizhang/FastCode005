@@ -23,22 +23,43 @@
 
 namespace cuda
 {
-  __global__ 
-  void 
-  matrix_mul_kernel(float *sq_matrix_1, float *sq_matrix_2, float *sq_matrix_result, int sq_dimension)
-  {
+ //  __global__ 
+ //  void 
+ //  matrix_mul_kernel(float *sq_matrix_1, float *sq_matrix_2, float *sq_matrix_result, int sq_dimension)
+ //  {
     
-    int tx = threadIdx.x;
-    int ty = threadIdx.y;
+ //    int tx = threadIdx.x;
+ //    int ty = threadIdx.y;
     
-    float sum = 0.0f;
+ //    float sum = 0.0f;
     
-    for(int k = 0; k < sq_dimension; k++)
-      {
-	sum += sq_matrix_1[ty*sq_dimension + k] * sq_matrix_2[k*sq_dimension + tx];
+ //    for(int k = 0; k < sq_dimension; k++)
+ //      {
+	// sum += sq_matrix_1[ty*sq_dimension + k] * sq_matrix_2[k*sq_dimension + tx];
+ //      }
+ //    sq_matrix_result[ty*sq_dimension + tx] = sum;
+    
+ //  }
+
+
+  // rewrote the kernel for easier modification - Vincent
+  __global__ void matrix_mul_kernel(float *A, float *B, float *C, int d) {
+    
+    // initialize row and column by index in the blocks
+    int row = blockIdx.y * blockDim.y + threadIdx.y;
+    int col = blockIdx.x * blockDim.x + threadIdx.x;
+
+    // check if out of matrix boundary
+    if (row < d && col < d) {
+      float tmp = 0.0;
+
+      //loop unrolling
+      #pragma unroll
+      for (int i = 0; i < d; i++) {
+        tmp += A[row * d + i] * B[i * d + col];
       }
-    sq_matrix_result[ty*sq_dimension + tx] = sum;
-    
+      C[row * d + col] = tmp;
+    }
   }
   
   void 
@@ -63,9 +84,15 @@ namespace cuda
     /***************************************************
    2nd Part: Inovke kernel 
     ****************************************************/
-    dim3 dimBlock(sq_dimension, sq_dimension);
-    dim3 dimGrid(1,1);
-    matrix_mul_kernel<<<dimGrid, dimBlock, dimBlock.x * dimBlock.x * sizeof(float)>>>(sq_matrix_1_d, sq_matrix_2_d, sq_matrix_result_d, sq_dimension);
+    // dim3 dimBlock(sq_dimension, sq_dimension);
+    // dim3 dimGrid(1,1);
+    // matrix_mul_kernel<<<dimGrid, dimBlock, dimBlock.x * dimBlock.x * sizeof(float)>>>(sq_matrix_1_d, sq_matrix_2_d, sq_matrix_result_d, sq_dimension);
+
+    // increase block dimension
+    int blockDimension = 32;
+    dim3 dimBlock(blockDimension, blockDimension);
+    dim3 dimGrid(ceil(double(sq_dimension)/double(dimBlock.x)), ceil(double(sq_dimension)/double(dimBlock.y)));
+    matrix_mul_kernel<<<dimGrid, dimBlock>>>(sq_matrix_1_d, sq_matrix_2_d, sq_matrix_result_d, sq_dimension);
     
     /***************************************************
    3rd Part: Transfer result from device to host 
