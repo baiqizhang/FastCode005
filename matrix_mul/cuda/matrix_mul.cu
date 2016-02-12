@@ -16,6 +16,7 @@
 */
 
 #define TILE_WIDTH 32
+#define TILE_WIDTH_SHIFT 5
 #include <cuda.h>
 #include <cuda_runtime.h>
 #include "matrix_mul.h"
@@ -84,19 +85,21 @@ namespace cuda
   __global__ void matrixMultiply(float * A, float * B, float * C, int d){
     __shared__ float A_tile[TILE_WIDTH][TILE_WIDTH];
     __shared__ float B_tile[TILE_WIDTH][TILE_WIDTH];
-    int row = blockIdx.y * TILE_WIDTH + threadIdx.y, col = blockIdx.x * TILE_WIDTH + threadIdx.x;
+    int row = (blockIdx.y<<TILE_WIDTH_SHIFT) + threadIdx.y, col = (blockIdx.x<<TILE_WIDTH_SHIFT) + threadIdx.x;
     float sum = 0;
 
     #pragma unroll
     for (int m = 0; m < (d-1)/TILE_WIDTH+1; ++m) {
-      if (row < d && m*TILE_WIDTH+threadIdx.x < d){
-        A_tile[threadIdx.y][threadIdx.x] = A[row*d + m*TILE_WIDTH+threadIdx.x];
+      if (row < d && (m<<TILE_WIDTH_SHIFT)+threadIdx.x < d){
+        A_tile[threadIdx.y][threadIdx.x] = A[row*d + (m<<TILE_WIDTH_SHIFT)+threadIdx.x];
+        //A_tile[threadIdx.y][threadIdx.x] = A[row + d*(m*TILE_WIDTH+threadIdx.x)];
       }
       else{
         A_tile[threadIdx.y][threadIdx.x] = 0;
       }
-      if (col < d && m*TILE_WIDTH+threadIdx.y < d){
-        B_tile[threadIdx.y][threadIdx.x] = B[(m*TILE_WIDTH+threadIdx.y)*d+col];
+      if (col < d && (m<<TILE_WIDTH_SHIFT)+threadIdx.y < d){
+        B_tile[threadIdx.y][threadIdx.x] = B[((m<<TILE_WIDTH_SHIFT)+threadIdx.y)*d+col];
+        //B_tile[threadIdx.y][threadIdx.x] = B[(m*TILE_WIDTH+threadIdx.y)+d*col];
       }
       else{
         B_tile[threadIdx.y][threadIdx.x] = 0;
@@ -123,6 +126,22 @@ namespace cuda
   1st Part: Allocation of memory on device memory  
     ****************************************************/
     
+    /*
+    float *A_t = (float*)calloc(sq_dimension * sq_dimension, sizeof(float));
+    for (int i = 0; i < sq_dimension; i++)
+        for(int j = 0; j < sq_dimension; j++){
+            A_t[i * sq_dimension + j] = sq_matrix_1[j * sq_dimension + i];
+        }
+    */ 
+
+    /*
+    float *B_t = (float*)calloc(sq_dimension * sq_dimension, sizeof(float));
+    for (int i = 0; i < sq_dimension; i++)
+        for(int j = 0; j < sq_dimension; j++){
+            B_t[i * sq_dimension + j] = sq_matrix_2[j * sq_dimension + i];
+        }    
+    */
+
     /* copy sq_matrix_1 and sq_matrix_2 to device memory */
     cudaMalloc((void**) &sq_matrix_1_d, size);
     cudaMemcpy(sq_matrix_1_d, sq_matrix_1, size, cudaMemcpyHostToDevice);
