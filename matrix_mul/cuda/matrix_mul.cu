@@ -77,7 +77,6 @@ namespace cuda
     /***************************************************
    2nd Part: Inovke kernel 
     ****************************************************/
-    printf("size=%d",sq_dimension);
     dim3 dimGrid((sq_dimension-1)/TILE_WIDTH+1, (sq_dimension-1)/TILE_WIDTH+1, 1);
     dim3 dimBlock(TILE_WIDTH, TILE_WIDTH, 1);
     matrixMultiply<<<dimGrid, dimBlock>>>(sq_matrix_1_d, sq_matrix_2_d, sq_matrix_result_d, sq_dimension);
