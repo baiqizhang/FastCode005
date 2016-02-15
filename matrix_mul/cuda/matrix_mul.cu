@@ -194,6 +194,52 @@ namespace cuda
     if (row < d && col < d)
       C[row*d + col] = sum;
   }
+  
+  __global__ void matrixMultiply_1024_2(float * A, float * B, float * C, int d){
+    __shared__ float A_tile[4][TILE_WIDTH][TILE_WIDTH];
+    __shared__ float B_tile[4][TILE_WIDTH][TILE_WIDTH];
+    int row = (blockIdx.y<<TILE_WIDTH_SHIFT) + threadIdx.y, col = (blockIdx.x<<TILE_WIDTH_SHIFT) + threadIdx.x;
+    float sum = 0,sum2=0;
+    
+    #pragma unroll
+    for (int m = 0; m < 32; m+=4) {
+      if (m!=0){
+        #pragma unroll
+        for (int k = 0; k < TILE_WIDTH; ++k){
+          sum += A_tile[2][threadIdx.y][k] * B_tile[2][k][threadIdx.x];
+          sum2 += A_tile[3][threadIdx.y][k] * B_tile[3][k][threadIdx.x];
+        }
+      }
+
+      A_tile[0][threadIdx.y][threadIdx.x] = A[row*d + (m<<TILE_WIDTH_SHIFT)+threadIdx.x];
+      B_tile[0][threadIdx.y][threadIdx.x] = B[((m<<TILE_WIDTH_SHIFT)+threadIdx.y)*d+col];
+      A_tile[1][threadIdx.y][threadIdx.x] = A[row*d + ((m+1)<<TILE_WIDTH_SHIFT)+threadIdx.x];
+      B_tile[1][threadIdx.y][threadIdx.x] = B[(((m+1)<<TILE_WIDTH_SHIFT)+threadIdx.y)*d+col];
+
+
+      __syncthreads();
+      #pragma unroll
+      for (int k = 0; k < TILE_WIDTH; ++k){
+        sum += A_tile[0][threadIdx.y][k] * B_tile[0][k][threadIdx.x];
+        sum2 += A_tile[1][threadIdx.y][k] * B_tile[1][k][threadIdx.x];
+      }
+
+      A_tile[2][threadIdx.y][threadIdx.x] = A[row*d + ((m+2)<<TILE_WIDTH_SHIFT)+threadIdx.x];
+      B_tile[2][threadIdx.y][threadIdx.x] = B[(((m+2)<<TILE_WIDTH_SHIFT)+threadIdx.y)*d+col];
+      A_tile[3][threadIdx.y][threadIdx.x] = A[row*d + ((m+3)<<TILE_WIDTH_SHIFT)+threadIdx.x];
+      B_tile[3][threadIdx.y][threadIdx.x] = B[(((m+3)<<TILE_WIDTH_SHIFT)+threadIdx.y)*d+col];
+      __syncthreads();
+    }
+    
+    #pragma unroll
+    for (int k = 0; k < TILE_WIDTH; ++k){
+          sum += A_tile[2][threadIdx.y][k] * B_tile[2][k][threadIdx.x];
+          sum2 += A_tile[3][threadIdx.y][k] * B_tile[3][k][threadIdx.x];
+    }
+
+    if (row < d && col < d)
+      C[row*d + col] = sum+sum2;
+  }
 
   // Compute C = A * B
   __global__ void matrixMultiply(float * A, float * B, float * C, int d){
@@ -250,7 +296,7 @@ namespace cuda
     dim3 dimGrid((sq_dimension-1)/TILE_WIDTH+1, (sq_dimension-1)/TILE_WIDTH+1, 1);
     dim3 dimBlock(TILE_WIDTH, TILE_WIDTH, 1);
     if (sq_dimension==1024){
-      matrixMultiply_1024<<<dimGrid, dimBlock>>>(sq_matrix_1_d, sq_matrix_2_d, sq_matrix_result_d, sq_dimension);
+      matrixMultiply_1024_2<<<dimGrid, dimBlock>>>(sq_matrix_1_d, sq_matrix_2_d, sq_matrix_result_d, sq_dimension);
     }else if (sq_dimension == 1000){
       matrixMultiply_1000_2<<<dimGrid, dimBlock>>>(sq_matrix_1_d, sq_matrix_2_d, sq_matrix_result_d, sq_dimension);
     }else{
