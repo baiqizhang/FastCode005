@@ -277,17 +277,12 @@ float** cuda_kmeans(float **objects,      /* in: [numObjs][numCoords] */
         checkCuda(cudaMemcpy(deviceClusters, dimClusters[0],
                   numClusters*numCoords*sizeof(float), cudaMemcpyHostToDevice));
 
-        printf("\nnCB:%d nTPCB:%d cBSDS:%d\n",
-                numClusterBlocks,numThreadsPerClusterBlock,clusterBlockSharedDataSize);
-        
         find_nearest_cluster
             <<< numClusterBlocks, numThreadsPerClusterBlock, clusterBlockSharedDataSize >>>
             (numCoords, numObjs, numClusters,
              deviceObjects, deviceClusters, deviceMembership, deviceIntermediates);
 
         cudaThreadSynchronize(); checkLastCudaError();
-
-        printf("\nnRT:%d rBSD:%d",numReductionThreads,reductionBlockSharedDataSize);
 
         compute_delta <<< 1, numReductionThreads, reductionBlockSharedDataSize >>>
             (deviceIntermediates, numClusterBlocks, numReductionThreads);
