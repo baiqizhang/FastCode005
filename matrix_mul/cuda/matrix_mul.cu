@@ -271,6 +271,13 @@ namespace cuda
   }
 
 
+  // Compute C = A * B
+  __global__ void preProcess(float * A, float * B, float * C, int d){
+    //int row = (blockIdx.y<<TILE_WIDTH_SHIFT) + threadIdx.y, col = (blockIdx.x<<TILE_WIDTH_SHIFT) + threadIdx.x;
+    //float sum = 0;
+      
+  }
+
   void 
   matrix_multiplication(float *sq_matrix_1, float *sq_matrix_2, float *sq_matrix_result, unsigned int sq_dimension)
   {
@@ -296,7 +303,7 @@ namespace cuda
     dim3 dimGrid((sq_dimension-1)/TILE_WIDTH+1, (sq_dimension-1)/TILE_WIDTH+1, 1);
     dim3 dimBlock(TILE_WIDTH, TILE_WIDTH, 1);
     if (sq_dimension==1024){
-      matrixMultiply_1024_2<<<dimGrid, dimBlock>>>(sq_matrix_1_d, sq_matrix_2_d, sq_matrix_result_d, sq_dimension);
+      matrixMultiply_1024<<<dimGrid, dimBlock>>>(sq_matrix_1_d, sq_matrix_2_d, sq_matrix_result_d, sq_dimension);
     }else if (sq_dimension == 1000){
       matrixMultiply_1000_2<<<dimGrid, dimBlock>>>(sq_matrix_1_d, sq_matrix_2_d, sq_matrix_result_d, sq_dimension);
     }else{

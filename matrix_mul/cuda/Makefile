@@ -1,6 +1,6 @@
 PROJ = matrix_mul
 CC = g++
-NVCC = nvcc -Xcompiler -fopenmp
+NVCC = nvcc
 
 CFLAGS = -c -g -o3 -Wall -I/opt/local/include -I$(HOME)/cppunit/include  -fopenmp
 LDFLAGS = -L/opt/local/lib -L$(HOME)/cppunit/lib
