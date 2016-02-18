@@ -155,7 +155,7 @@ void find_nearest_cluster(int numCoords,
 }
 
 __global__ static
-void compute_delta(int *deviceIntermediates,
+void compute_delta2(int *deviceIntermediates,
                    int numIntermediates,    //  The actual number of intermediates
                    int numIntermediates2)   //  The next power of two
 {
@@ -170,6 +170,35 @@ void compute_delta(int *deviceIntermediates,
         + (threadIdx.x +  numIntermediates2 < numIntermediates) ? deviceIntermediates[threadIdx.x +  numIntermediates2] : 0;
 ;
 
+    __syncthreads();
+
+    //  numIntermediates2 *must* be a power of two!
+    for (unsigned int s = numIntermediates2 / 2; s > 0; s >>= 1) {
+        if (threadIdx.x < s) {
+            intermediates[threadIdx.x] += intermediates[threadIdx.x + s];
+        }
+        __syncthreads();
+    }
+
+    if (threadIdx.x == 0) {
+        deviceIntermediates[0] = intermediates[0];
+    }
+}
+
+
+__global__ static
+void compute_delta(int *deviceIntermediates,
+                   int numIntermediates,    //  The actual number of intermediates
+                   int numIntermediates2)   //  The next power of two
+{
+    //  The number of elements in this array should be equal to
+    //  numIntermediates2, the number of threads launched. It *must* be a power
+    //  of two!
+    extern __shared__ unsigned int intermediates[];
+
+    //  Copy global intermediate values into shared memory.
+    intermediates[threadIdx.x] =
+        (threadIdx.x < numIntermediates) ? deviceIntermediates[threadIdx.x] : 0;
     __syncthreads();
 
     //  numIntermediates2 *must* be a power of two!
@@ -290,9 +319,12 @@ float** cuda_kmeans(float **objects,      /* in: [numObjs][numCoords] */
         cudaThreadSynchronize(); checkLastCudaError();
 
         //printf("\nnRT:%d rBSD:%d",numReductionThreads,reductionBlockSharedDataSize);
-        
-        compute_delta <<< 1, numReductionThreads/2, reductionBlockSharedDataSize >>>
-            (deviceIntermediates, numClusterBlocks, numReductionThreads);
+        if (numReductionThreads<1024)
+            compute_delta <<< 1, numReductionThreads/2, reductionBlockSharedDataSize >>>
+                (deviceIntermediates, numClusterBlocks, numReductionThreads);
+        else
+            compute_delta2 <<< 1, numReductionThreads/2, reductionBlockSharedDataSize >>>
+                (deviceIntermediates, numClusterBlocks, numReductionThreads);
 
         cudaThreadSynchronize(); checkLastCudaError();
 
