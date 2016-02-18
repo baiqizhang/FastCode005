@@ -71,7 +71,7 @@ float euclid_dist_2(int    numCoords,
 {
     int i;
     float ans=0.0;
-
+    
     for (i = 0; i < numCoords; i++) {
         ans += (objects[numObjs * i + objectId] - clusters[numClusters * i + clusterId]) *
                (objects[numObjs * i + objectId] - clusters[numClusters * i + clusterId]);
@@ -79,6 +79,29 @@ float euclid_dist_2(int    numCoords,
 
     return(ans);
 }
+
+
+/*
+
+input format
+
+objects:
+
+       obj0 obj1 obj2 obj3 ...
+coord1
+coord2
+coord3
+....
+
+clusters:
+
+       clust0 clust1 clust2 clust3 ...
+coord1
+coord2
+coord3
+....
+
+*/
 
 /*----< find_nearest_cluster() >---------------------------------------------*/
 __global__ static
@@ -142,8 +165,7 @@ void find_nearest_cluster(int numCoords,
         //  blockDim.x *must* be a power of two!
         for (unsigned int s = blockDim.x / 2; s > 0; s >>= 1) {
             if (threadIdx.x < s) {
-                membershipChanged[threadIdx.x] +=
-                    membershipChanged[threadIdx.x + s];
+                membershipChanged[threadIdx.x] += membershipChanged[threadIdx.x + s];
             }
             __syncthreads();
         }
@@ -165,7 +187,7 @@ void compute_delta(int *deviceIntermediates,
     extern __shared__ unsigned int intermediates[];
 
     //  Copy global intermediate values into shared memory.
-    intermediates[threadIdx.x] =
+    intermediates[threadIdx.x] = 
         (threadIdx.x < numIntermediates) ? deviceIntermediates[threadIdx.x] : 0;
 
     __syncthreads();
@@ -289,7 +311,7 @@ float** cuda_kmeans(float **objects,      /* in: [numObjs][numCoords] */
     //  two, and it *must* be no larger than the number of bits that will
     //  fit into an unsigned char, the type used to keep track of membership
     //  changes in the kernel.
-    const unsigned int numThreadsPerClusterBlock = 128;
+    const unsigned int numThreadsPerClusterBlock = 256;
     const unsigned int numClusterBlocks =
         (numObjs + numThreadsPerClusterBlock - 1) / numThreadsPerClusterBlock;
     const unsigned int clusterBlockSharedDataSize =
