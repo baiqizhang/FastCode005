@@ -311,7 +311,7 @@ float** cuda_kmeans(float **objects,      /* in: [numObjs][numCoords] */
     //  two, and it *must* be no larger than the number of bits that will
     //  fit into an unsigned char, the type used to keep track of membership
     //  changes in the kernel.
-    const unsigned int numThreadsPerClusterBlock = 128;
+    const unsigned int numThreadsPerClusterBlock = 256;
     const unsigned int numClusterBlocks =
         (numObjs + numThreadsPerClusterBlock - 1) / numThreadsPerClusterBlock;
     const unsigned int clusterBlockSharedDataSize =
