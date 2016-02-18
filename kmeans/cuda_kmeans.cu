@@ -197,7 +197,9 @@ void compute_delta2(int *deviceIntermediates,
     //  Copy global intermediate values into shared memory.
     intermediates[threadIdx.x] =
         (threadIdx.x < numIntermediates) ? deviceIntermediates[threadIdx.x] : 0 + 
-        (threadIdx.x + numIntermediates2  < numIntermediates) ? deviceIntermediates[threadIdx.x+numIntermediates2] : 0 ;
+        (threadIdx.x + numIntermediates2  < numIntermediates) ? deviceIntermediates[threadIdx.x+numIntermediates2] : 0 +
+        (threadIdx.x + numIntermediates2*2  < numIntermediates) ? deviceIntermediates[threadIdx.x+numIntermediates2*2] : 0 +
+        (threadIdx.x + numIntermediates2*3  < numIntermediates) ? deviceIntermediates[threadIdx.x+numIntermediates2*3] : 0 ;
 
     __syncthreads();
 
