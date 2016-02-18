@@ -188,7 +188,7 @@ void compute_delta2(int *deviceIntermediates,
                    int numIntermediates,    //  The actual number of intermediates
                    int numIntermediates2)   //  The next power of two
 {
-    
+    /*
     //  The number of elements in this array should be equal to
     //  numIntermediates2, the number of threads launched. It *must* be a power
     //  of two!
@@ -213,11 +213,11 @@ void compute_delta2(int *deviceIntermediates,
 
     if (threadIdx.x == 0) {
         deviceIntermediates[0] = intermediates[0]*8;
-    }
-    /*
+    }*/
+    
     for (unsigned int s = 1; s < numIntermediates; s++) 
         deviceIntermediates[0]+=deviceIntermediates[s];
-    */
+    
 }
 
 
@@ -323,8 +323,10 @@ float** cuda_kmeans(float **objects,      /* in: [numObjs][numCoords] */
         cudaThreadSynchronize(); checkLastCudaError();
 
         if (numReductionThreads>1024)
-            compute_delta2 <<< 1,  numReductionThreads/4, reductionBlockSharedDataSize >>>
-                (deviceIntermediates, numClusterBlocks, numReductionThreads/4);
+            compute_delta2 <<< 1, 1, reductionBlockSharedDataSize >>>
+                (deviceIntermediates, numClusterBlocks, numReductionThreads);
+            //compute_delta2 <<< 1,  numReductionThreads/4, reductionBlockSharedDataSize >>>
+              //  (deviceIntermediates, numClusterBlocks, numReductionThreads/4);
         else
             compute_delta <<< 1, numReductionThreads, reductionBlockSharedDataSize >>>
                 (deviceIntermediates, numClusterBlocks, numReductionThreads);
