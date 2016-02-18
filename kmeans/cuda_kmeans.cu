@@ -167,7 +167,7 @@ void compute_delta(int *deviceIntermediates,
     //  Copy global intermediate values into shared memory.
     intermediates[threadIdx.x] =
         (threadIdx.x < numIntermediates) ? deviceIntermediates[threadIdx.x] : 0
-        + (threadIdx.x +  blockDim.x < numIntermediates) ? deviceIntermediates[threadIdx.x +  blockDim.x] : 0;
+        + (threadIdx.x +  numIntermediates2 < numIntermediates) ? deviceIntermediates[threadIdx.x +  numIntermediates2] : 0;
 ;
 
     __syncthreads();
@@ -291,7 +291,7 @@ float** cuda_kmeans(float **objects,      /* in: [numObjs][numCoords] */
 
         //printf("\nnRT:%d rBSD:%d",numReductionThreads,reductionBlockSharedDataSize);
         
-        compute_delta <<< 1, numReductionThreads/2+1, reductionBlockSharedDataSize >>>
+        compute_delta <<< 1, numReductionThreads/2, reductionBlockSharedDataSize >>>
             (deviceIntermediates, numClusterBlocks, numReductionThreads);
 
         cudaThreadSynchronize(); checkLastCudaError();
