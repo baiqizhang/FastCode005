@@ -166,7 +166,9 @@ void compute_delta(int *deviceIntermediates,
 
     //  Copy global intermediate values into shared memory.
     intermediates[threadIdx.x] =
-        (threadIdx.x < numIntermediates) ? deviceIntermediates[threadIdx.x] : 0;
+        (threadIdx.x < numIntermediates) ? deviceIntermediates[threadIdx.x] : 0
+        + (threadIdx.x +  blockDim.x < numIntermediates) ? deviceIntermediates[threadIdx.x +  blockDim.x] : 0;
+;
 
     __syncthreads();
 
@@ -251,7 +253,7 @@ float** cuda_kmeans(float **objects,      /* in: [numObjs][numCoords] */
     //  two, and it *must* be no larger than the number of bits that will
     //  fit into an unsigned char, the type used to keep track of membership
     //  changes in the kernel.
-    const unsigned int numThreadsPerClusterBlock = 512;
+    const unsigned int numThreadsPerClusterBlock = 256;
     const unsigned int numClusterBlocks =
         (numObjs + numThreadsPerClusterBlock - 1) / numThreadsPerClusterBlock;
     const unsigned int clusterBlockSharedDataSize =
@@ -277,6 +279,9 @@ float** cuda_kmeans(float **objects,      /* in: [numObjs][numCoords] */
         checkCuda(cudaMemcpy(deviceClusters, dimClusters[0],
                   numClusters*numCoords*sizeof(float), cudaMemcpyHostToDevice));
 
+        //printf("\nnCB:%d nTPCB:%d cBSDS:%d\n",
+        //        numClusterBlocks,numThreadsPerClusterBlock,clusterBlockSharedDataSize);
+        
         find_nearest_cluster
             <<< numClusterBlocks, numThreadsPerClusterBlock, clusterBlockSharedDataSize >>>
             (numCoords, numObjs, numClusters,
@@ -284,7 +289,9 @@ float** cuda_kmeans(float **objects,      /* in: [numObjs][numCoords] */
 
         cudaThreadSynchronize(); checkLastCudaError();
 
-        compute_delta <<< 1, numReductionThreads, reductionBlockSharedDataSize >>>
+        //printf("\nnRT:%d rBSD:%d",numReductionThreads,reductionBlockSharedDataSize);
+        
+        compute_delta <<< 1, numReductionThreads/2, reductionBlockSharedDataSize >>>
             (deviceIntermediates, numClusterBlocks, numReductionThreads);
 
         cudaThreadSynchronize(); checkLastCudaError();
