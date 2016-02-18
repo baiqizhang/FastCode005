@@ -71,7 +71,7 @@ float euclid_dist_2(int    numCoords,
 {
     int i;
     float ans=0.0;
-
+    
     for (i = 0; i < numCoords; i++) {
         ans += (objects[numObjs * i + objectId] - clusters[numClusters * i + clusterId]) *
                (objects[numObjs * i + objectId] - clusters[numClusters * i + clusterId]);
@@ -79,6 +79,29 @@ float euclid_dist_2(int    numCoords,
 
     return(ans);
 }
+
+
+/*
+
+input format
+
+objects:
+
+       obj0 obj1 obj2 obj3 ...
+coord1
+coord2
+coord3
+....
+
+clusters:
+
+       clust0 clust1 clust2 clust3 ...
+coord1
+coord2
+coord3
+....
+
+*/
 
 /*----< find_nearest_cluster() >---------------------------------------------*/
 __global__ static
