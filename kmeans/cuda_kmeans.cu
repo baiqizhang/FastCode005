@@ -212,7 +212,7 @@ void compute_delta2(int *deviceIntermediates,
     }
 
     if (threadIdx.x == 0) {
-        deviceIntermediates[0] = intermediates[0]*6;
+        deviceIntermediates[0] = intermediates[0]*8;
     }
     /*
     for (unsigned int s = 1; s < numIntermediates; s++) 
