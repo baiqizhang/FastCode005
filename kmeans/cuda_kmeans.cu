@@ -325,7 +325,7 @@ float** cuda_kmeans(float **objects,      /* in: [numObjs][numCoords] */
         if (numReductionThreads>1024)
             compute_delta2 <<< 1, 1, reductionBlockSharedDataSize >>>
                 (deviceIntermediates, numClusterBlocks, numReductionThreads);
-            //compute_delta2 <<< 1,  numReductionThreads/4, reductionBlockSharedDataSize >>>
+           //compute_delta2 <<< 1,  numReductionThreads/4, reductionBlockSharedDataSize >>>
               //  (deviceIntermediates, numClusterBlocks, numReductionThreads/4);
         else
             compute_delta <<< 1, numReductionThreads, reductionBlockSharedDataSize >>>
