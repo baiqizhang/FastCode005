@@ -188,6 +188,7 @@ void compute_delta2(int *deviceIntermediates,
                    int numIntermediates,    //  The actual number of intermediates
                    int numIntermediates2)   //  The next power of two
 {
+    
     //  The number of elements in this array should be equal to
     //  numIntermediates2, the number of threads launched. It *must* be a power
     //  of two!
@@ -211,6 +212,10 @@ void compute_delta2(int *deviceIntermediates,
     if (threadIdx.x == 0) {
         deviceIntermediates[0] = intermediates[0];
     }
+    /*
+    for (unsigned int s = 1; s < numIntermediates; s++) 
+        deviceIntermediates[0]+=deviceIntermediates[s];
+    */
 }
 
 
@@ -282,7 +287,7 @@ float** cuda_kmeans(float **objects,      /* in: [numObjs][numCoords] */
     //  two, and it *must* be no larger than the number of bits that will
     //  fit into an unsigned char, the type used to keep track of membership
     //  changes in the kernel.
-    const unsigned int numThreadsPerClusterBlock = 256;
+    const unsigned int numThreadsPerClusterBlock = 128;
     const unsigned int numClusterBlocks =
         (numObjs + numThreadsPerClusterBlock - 1) / numThreadsPerClusterBlock;
     const unsigned int clusterBlockSharedDataSize =
@@ -316,8 +321,8 @@ float** cuda_kmeans(float **objects,      /* in: [numObjs][numCoords] */
         cudaThreadSynchronize(); checkLastCudaError();
 
         if (numReductionThreads>1024)
-            compute_delta <<< 1, numReductionThreads/2, reductionBlockSharedDataSize >>>
-                (deviceIntermediates, numClusterBlocks, numReductionThreads/2);
+            compute_delta2 <<< 1,  numReductionThreads/4, reductionBlockSharedDataSize >>>
+                (deviceIntermediates, numClusterBlocks, numReductionThreads/4);
         else
             compute_delta <<< 1, numReductionThreads, reductionBlockSharedDataSize >>>
                 (deviceIntermediates, numClusterBlocks, numReductionThreads);
@@ -353,7 +358,7 @@ float** cuda_kmeans(float **objects,      /* in: [numObjs][numCoords] */
             }
             newClusterSize[i] = 0;   /* set back to 0 */
         }
-
+        //printf("\ndelta:%f\n",delta);
         delta /= numObjs;
     } while (delta > threshold && loop++ < 500);
 
