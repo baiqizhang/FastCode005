@@ -77,6 +77,28 @@ float euclid_dist_2(int    numCoords,
                (objects[numObjs * i + objectId] - clusters[numClusters * i + clusterId]);
     }
 
+    // 6-way unrolling
+    for (i = 0; i < numCoords - 5; i += 6) {
+        ans += (objects[numObjs * i + objectId] - clusters[numClusters * i + clusterId]) *
+               (objects[numObjs * i + objectId] - clusters[numClusters * i + clusterId]);
+        ans += (objects[numObjs * (i+1) + objectId] - clusters[numClusters * (i+1) + clusterId]) *
+               (objects[numObjs * (i+1) + objectId] - clusters[numClusters * (i+1) + clusterId]);
+        ans += (objects[numObjs * (i+2) + objectId] - clusters[numClusters * (i+2) + clusterId]) *
+               (objects[numObjs * (i+2) + objectId] - clusters[numClusters * (i+2) + clusterId]);
+        ans += (objects[numObjs * (i+3) + objectId] - clusters[numClusters * (i+3) + clusterId]) *
+               (objects[numObjs * (i+3) + objectId] - clusters[numClusters * (i+3) + clusterId]);
+        ans += (objects[numObjs * (i+4) + objectId] - clusters[numClusters * (i+4) + clusterId]) *
+               (objects[numObjs * (i+4) + objectId] - clusters[numClusters * (i+4) + clusterId]);
+        ans += (objects[numObjs * (i+5) + objectId] - clusters[numClusters * (i+5) + clusterId]) *
+               (objects[numObjs * (i+5) + objectId] - clusters[numClusters * (i+5) + clusterId]);
+    }
+    // boundary condition
+    for (int j = i; j < numCoords; j++) {
+        ans += (objects[numObjs * j + objectId] - clusters[numClusters * j + clusterId]) *
+               (objects[numObjs * j + objectId] - clusters[numClusters * j + clusterId]);
+    }
+
+
     return(ans);
 }
 
