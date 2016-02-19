@@ -165,7 +165,7 @@ void find_nearest_cluster(int numCoords,
         __syncthreads();    //  For membershipChanged[]
 
         //  blockDim.x *must* be a power of two!
-        for (unsigned int s = blockDim.x / 2; s > 31; s >>= 1) {
+        for (unsigned int s = blockDim.x / 2; s > 32; s >>= 1) {
             if (threadIdx.x < s) {
                 membershipChanged[threadIdx.x] +=
                     membershipChanged[threadIdx.x + s];
@@ -207,7 +207,7 @@ void compute_delta(int *deviceIntermediates,
     __syncthreads();
 
     //  numIntermediates2 *must* be a power of two!
-    for (unsigned int s = numIntermediates2 / 2; s > 31; s >>= 1) {
+    for (unsigned int s = numIntermediates2 / 2; s > 32; s >>= 1) {
         if (threadIdx.x < s) {
             intermediates[threadIdx.x] += intermediates[threadIdx.x + s];
         }
