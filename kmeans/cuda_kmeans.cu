@@ -72,10 +72,11 @@ float euclid_dist_2(int    numCoords,
     int i;
     float ans=0.0;
 
-    for (i = 0; i < numCoords; i++) {
-        ans += (objects[numObjs * i + objectId] - clusters[numClusters * i + clusterId]) *
-               (objects[numObjs * i + objectId] - clusters[numClusters * i + clusterId]);
-    }
+    // original code
+    // for (i = 0; i < numCoords; i++) {
+    //     ans += (objects[numObjs * i + objectId] - clusters[numClusters * i + clusterId]) *
+    //            (objects[numObjs * i + objectId] - clusters[numClusters * i + clusterId]);
+    // }
 
     // 6-way unrolling
     for (i = 0; i < numCoords - 5; i += 6) {
@@ -97,7 +98,6 @@ float euclid_dist_2(int    numCoords,
         ans += (objects[numObjs * j + objectId] - clusters[numClusters * j + clusterId]) *
                (objects[numObjs * j + objectId] - clusters[numClusters * j + clusterId]);
     }
-
 
     return(ans);
 }
@@ -124,6 +124,9 @@ void find_nearest_cluster(int numCoords,
 
     //  BEWARE: We can overrun our shared memory here if there are too many
     //  clusters or too many coordinates!
+
+    // using CUDA unroll
+    #pragma unroll
     for (int i = threadIdx.x; i < numClusters; i += blockDim.x) {
         for (int j = 0; j < numCoords; j++) {
             clusters[numClusters * j + i] = deviceClusters[numClusters * j + i];
@@ -170,6 +173,7 @@ void find_nearest_cluster(int numCoords,
             __syncthreads();
         }
 
+        // only first thread in the grid executes this statement
         if (threadIdx.x == 0) {
             intermediates[blockIdx.x] = membershipChanged[0];
         }
