@@ -301,17 +301,15 @@ void compute_delta2(int *deviceIntermediates,
         __syncthreads(); 
     //}
 
-    int a,b,c,d,e,f;
      // Unrolling warp
     if (tid < 32){
         volatile unsigned int* vmem = intermediates;
-        a = vmem[tid+32];
-        b = vmem[tid+16];
-        c = vmem[tid+8];
-        d = vmem[tid+4];
-        e = vmem[tid+2];
-        f = vmem[tid+1];
-        vmem[tid] = a+b+c+d+e+f;
+        vmem[tid] += vmem[tid+32];
+        vmem[tid] += vmem[tid+16];
+        vmem[tid] += vmem[tid+8];
+        vmem[tid] += vmem[tid+4];
+        vmem[tid] += vmem[tid+2];
+        vmem[tid] += vmem[tid+1];
     }
 
     if (tid == 0) {
