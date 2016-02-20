@@ -167,8 +167,8 @@ void find_nearest_cluster(int numCoords,
 
         __syncthreads();    //  For membershipChanged[]
 
-        //  blockDim.x *must* be a power of two!
-        for (unsigned int s = blockDim.x / 2; s > 32; s >>= 1) {
+        //blockDim.x *must* be a power of two!
+        for (unsigned int s = blockDim.x / 2; s > 128; s >>= 1) {
             if (tid < s) {
                 membershipChanged[tid] +=
                     membershipChanged[tid + s];
@@ -176,15 +176,41 @@ void find_nearest_cluster(int numCoords,
             __syncthreads();
         }
 
+/*
+        if (blockDim.x >= 1024) {
+            if (tid < 512) { 
+                intermediates[tid] += intermediates[tid + 512]; 
+            } 
+            __syncthreads(); 
+        }
+        if (blockDim.x >= 512) {
+            if (tid < 256) { 
+                intermediates[tid] += intermediates[tid + 256]; 
+            }    
+            __syncthreads(); 
+        }
+        if (blockDim.x >= 256) {
+            if (tid < 128) { 
+                intermediates[tid] += intermediates[tid + 128]; 
+            } 
+            __syncthreads(); 
+        }*/
+        if (blockDim.x >= 128) {
+            if (tid < 64) { 
+                intermediates[tid] += intermediates[tid + 64]; 
+            }    
+            __syncthreads(); 
+        }
+
         // Unrolling warp
         if(tid < 32){
             volatile unsigned char* vmem = membershipChanged;
-            vmem[tid] += vmem[tid+32];
-            vmem[tid] += vmem[tid+16];
-            vmem[tid] += vmem[tid+8];
-            vmem[tid] += vmem[tid+4];
-            vmem[tid] += vmem[tid+2];
-            vmem[tid] += vmem[tid+1];
+            if (blockDim.x >= 64) vmem[tid] += vmem[tid+32];
+            if (blockDim.x >= 32) vmem[tid] += vmem[tid+16];
+            if (blockDim.x >= 16) vmem[tid] += vmem[tid+8];
+            if (blockDim.x >= 8) vmem[tid] += vmem[tid+4];
+            if (blockDim.x >= 4) vmem[tid] += vmem[tid+2];
+            if (blockDim.x >= 2) vmem[tid] += vmem[tid+1];
         }
 
         // only first thread in the grid executes this statement
@@ -259,15 +285,13 @@ void compute_delta2(int *deviceIntermediates,
         limit += BLOCKSIZE2;
     }*/
     //printf("%d", numIntermediates);
+
     // If BLOCKSIZE2 == 1024, HARD CODE HERE
     deviceIntermediates[tid] += deviceIntermediates[tid + 1024]; 
     deviceIntermediates[tid] += deviceIntermediates[tid + 2048];
-    //deviceIntermediates[tid] += deviceIntermediates[tid + 3072];
     if(tid + 3072 < numIntermediates){
         deviceIntermediates[tid] += deviceIntermediates[tid + 3072];
     }
-
-
 
     //  The number of elements in this array should be equal to
     //  numIntermediates2, the number of threads launched. It *must* be a power
