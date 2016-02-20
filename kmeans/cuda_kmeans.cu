@@ -255,12 +255,12 @@ void compute_delta(int *deviceIntermediates,
      // Unrolling warp
     if (tid < 32){
         volatile unsigned int* vmem = intermediates;
-        vmem[tid] += vmem[tid+32];
-        vmem[tid] += vmem[tid+16];
-        vmem[tid] += vmem[tid+8];
-        vmem[tid] += vmem[tid+4];
-        vmem[tid] += vmem[tid+2];
-        vmem[tid] += vmem[tid+1];
+        if (blockDim.x >= 64) vmem[tid] += vmem[tid+32];
+        if (blockDim.x >= 32) vmem[tid] += vmem[tid+16];
+        if (blockDim.x >= 16) vmem[tid] += vmem[tid+8];
+        if (blockDim.x >= 8) vmem[tid] += vmem[tid+4];
+        if (blockDim.x >= 4) vmem[tid] += vmem[tid+2];
+        if (blockDim.x >= 2) vmem[tid] += vmem[tid+1];
     }
 
     if (tid == 0) {
