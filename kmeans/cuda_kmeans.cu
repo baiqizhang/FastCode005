@@ -40,6 +40,8 @@
 
 // -----------------------------------------------------------------------------
 
+#define BLOCKSIZE2 1024
+
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -275,12 +277,12 @@ void compute_delta2(int *deviceIntermediates,
 
 
     // limit is shared memory size
-    int limit = 256;
+    int limit = BLOCKSIZE2;
     unsigned int tid = threadIdx.x;
     // divergence at the end!!!!!
     while ((tid + limit) < numIntermediates) {
         deviceIntermediates[tid] += deviceIntermediates[tid + limit];
-        limit += 256;
+        limit += BLOCKSIZE2;
     }
     //  The number of elements in this array should be equal to
     //  numIntermediates2, the number of threads launched. It *must* be a power
@@ -425,10 +427,10 @@ float** cuda_kmeans(float **objects,      /* in: [numObjs][numCoords] */
         if (numReductionThreads>1024) {
             // rewrite the kernel dimenstion for reduction
             //blockDim must equal limit in compute_delta2!
-            dim3 blockDim = 256;
+            dim3 blockDim = BLOCKSIZE2;
             dim3 gridDim = numClusterBlocks/blockDim.x + 1;
-            compute_delta2 <<< gridDim, blockDim, 256 * sizeof(unsigned int) >>>
-                (deviceIntermediates, numClusterBlocks, 256);
+            compute_delta2 <<< gridDim, blockDim, BLOCKSIZE2 * sizeof(unsigned int) >>>
+                (deviceIntermediates, numClusterBlocks, BLOCKSIZE2);
            //compute_delta2 <<< 1,  numReductionThreads/4, reductionBlockSharedDataSize >>>
               //  (deviceIntermediates, numClusterBlocks, numReductionThreads/4);
             }
