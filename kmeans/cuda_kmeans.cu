@@ -403,10 +403,10 @@ float** cuda_kmeans(float **objects,      /* in: [numObjs][numCoords] */
 
         if (numReductionThreads>1024) {
             // rewrite the kernel dimenstion for reduction
-            dim3 blockDim = 512;
+            dim3 blockDim = 256;
             dim3 gridDim = numClusterBlocks/blockDim.x + 1;
-            compute_delta2 <<< gridDim, blockDim, 512 * sizeof(unsigned int) >>>
-                (deviceIntermediates, numClusterBlocks, 512);
+            compute_delta2 <<< gridDim, blockDim, 256 * sizeof(unsigned int) >>>
+                (deviceIntermediates, numClusterBlocks, 256);
            //compute_delta2 <<< 1,  numReductionThreads/4, reductionBlockSharedDataSize >>>
               //  (deviceIntermediates, numClusterBlocks, numReductionThreads/4);
             }
