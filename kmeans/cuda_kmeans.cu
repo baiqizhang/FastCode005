@@ -431,7 +431,7 @@ float** cuda_kmeans(float **objects,      /* in: [numObjs][numCoords] */
             }
         else
             dim3 blockDim = numReductionThreads;
-            dim3 gridDim = numClusterBlocks/blockDim.x + 1;
+            dim3 gridDim = 1;
             compute_delta <<< gridDim, blockDim, reductionBlockSharedDataSize >>>
                 (deviceIntermediates, numClusterBlocks, numReductionThreads);
 
