@@ -121,7 +121,7 @@ void find_nearest_cluster(int numCoords,
     unsigned char *membershipChanged = (unsigned char *)sharedMemory;
     float *clusters = (float *)(sharedMemory + blockDim.x);
 
-    membershipChanged[threadIdx.x] = 0;
+    membershipChanged[tid] = 0;
 
     //  BEWARE: We can overrun our shared memory here if there are too many
     //  clusters or too many coordinates!
@@ -135,7 +135,7 @@ void find_nearest_cluster(int numCoords,
     }
     __syncthreads();
 
-    int objectId = blockDim.x * blockIdx.x + threadIdx.x;
+    int objectId = blockDim.x * blockIdx.x + tid;
 
     if (objectId < numObjs) {
         int   index, i;
@@ -175,7 +175,7 @@ void find_nearest_cluster(int numCoords,
         }
 
         // Unrolling warp
-        if(threadIdx.x < 32){
+        if(tid < 32){
             volatile unsigned char* vmem = membershipChanged;
             vmem[tid] += vmem[tid+32];
             vmem[tid] += vmem[tid+16];
