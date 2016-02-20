@@ -238,7 +238,7 @@ void compute_delta(int *deviceIntermediates,
     __syncthreads();
 
     //  numIntermediates2 *must* be a power of two!
-    for (unsigned int s = numIntermediates2 / 2; s > 0; s >>= 1) {
+    for (unsigned int s = numIntermediates2 / 2; s > 32; s >>= 1) {
         if (tid < s) {
             intermediates[tid] += intermediates[tid + s];
         }
@@ -252,16 +252,16 @@ void compute_delta(int *deviceIntermediates,
     //     __syncthreads();
     // }
 
-    //  // Unrolling warp
-    // if (tid < 32){
-    //     volatile unsigned int* vmem = intermediates;
-    //     vmem[tid] += vmem[tid+32];
-    //     vmem[tid] += vmem[tid+16];
-    //     vmem[tid] += vmem[tid+8];
-    //     vmem[tid] += vmem[tid+4];
-    //     vmem[tid] += vmem[tid+2];
-    //     vmem[tid] += vmem[tid+1];
-    // }
+     // Unrolling warp
+    if (tid < 32){
+        volatile unsigned int* vmem = intermediates;
+        vmem[tid] += vmem[tid+32];
+        vmem[tid] += vmem[tid+16];
+        vmem[tid] += vmem[tid+8];
+        vmem[tid] += vmem[tid+4];
+        vmem[tid] += vmem[tid+2];
+        vmem[tid] += vmem[tid+1];
+    }
 
     if (tid == 0) {
         deviceIntermediates[0] = intermediates[0];
