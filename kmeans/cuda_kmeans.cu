@@ -248,34 +248,6 @@ void compute_delta2(int *deviceIntermediates,
                    int numIntermediates,    //  The actual number of intermediates
                    int numIntermediates2)   //  The next power of two
 {
-    /*
-    //  The number of elements in this array should be equal to
-    //  numIntermediates2, the number of threads launched. It *must* be a power
-    //  of two!
-    extern __shared__ unsigned int intermediates[];
-
-    //  Copy global intermediate values into shared memory.
-    intermediates[threadIdx.x] =
-        (threadIdx.x < numIntermediates) ? deviceIntermediates[threadIdx.x] : 0 + 
-        (threadIdx.x + numIntermediates2  < numIntermediates) ? deviceIntermediates[threadIdx.x+numIntermediates2] : 0 +
-        (threadIdx.x + numIntermediates2*2  < numIntermediates) ? deviceIntermediates[threadIdx.x+numIntermediates2*2] : 0 +
-        (threadIdx.x + numIntermediates2*3  < numIntermediates) ? deviceIntermediates[threadIdx.x+numIntermediates2*3] : 0 ;
-
-    __syncthreads();
-
-    //  numIntermediates2 *must* be a power of two!
-    for (unsigned int s = numIntermediates2 / 2; s > 0; s >>= 1) {
-        if (threadIdx.x < s) {
-            intermediates[threadIdx.x] += intermediates[threadIdx.x + s];
-        }
-        __syncthreads();
-    }
-
-    if (threadIdx.x == 0) {
-        deviceIntermediates[0] = intermediates[0]*8;
-    }*/
-
-
     // limit is shared memory size
     int limit = BLOCKSIZE2;
     unsigned int tid = threadIdx.x;
@@ -295,12 +267,38 @@ void compute_delta2(int *deviceIntermediates,
     __syncthreads();
 
     //  numIntermediates2 *must* be a power of two!
-    for (unsigned int s = numIntermediates2 / 2; s > 32; s >>= 1) {
-        if (tid < s) {
-            intermediates[tid] += intermediates[tid + s];
-        }
-        __syncthreads();
-    }
+    // for (unsigned int s = numIntermediates2 / 2; s > 32; s >>= 1) {
+    //     if (tid < s) {
+    //         intermediates[tid] += intermediates[tid + s];
+    //     }
+    //     __syncthreads();
+    // }
+
+    // try complete unrolling
+    //if (numIntermediates2 >= 1024) {
+        if (tid < 512) { 
+            intermediates[tid] += intermediates[tid + 512]; 
+        } 
+        __syncthreads(); 
+    //}
+    //if (numIntermediates2 >= 512) {
+        if (tid < 256) { 
+            intermediates[tid] += intermediates[tid + 256]; 
+        } 
+        __syncthreads(); 
+    //}
+    //if (numIntermediates2 >= 256) {
+        if (tid < 128) { 
+            intermediates[tid] += intermediates[tid + 128]; 
+        } 
+        __syncthreads(); 
+    //}
+    //if (numIntermediates2 >= 128) {
+        if (tid < 64) { 
+            intermediates[tid] += intermediates[tid + 64]; 
+        } 
+        __syncthreads(); 
+    //}
 
      // Unrolling warp
     if (tid < 32){
