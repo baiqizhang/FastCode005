@@ -199,7 +199,7 @@ void compute_delta(int *deviceIntermediates,
     //  numIntermediates2, the number of threads launched. It *must* be a power
     //  of two!
     extern __shared__ unsigned int intermediates[];
-    unsigned int tid = threadIdx.x;
+
     //  Copy global intermediate values into shared memory.
     intermediates[threadIdx.x] =
         (threadIdx.x < numIntermediates) ? deviceIntermediates[threadIdx.x] : 0;
@@ -207,53 +207,23 @@ void compute_delta(int *deviceIntermediates,
     __syncthreads();
 
     //  numIntermediates2 *must* be a power of two!
-    // for (unsigned int s = numIntermediates2 / 2; s > 32; s >>= 1) {
-    //     if (threadIdx.x < s) {
-    //         intermediates[threadIdx.x] += intermediates[threadIdx.x + s];
-    //     }
-    //     __syncthreads();
-    // }
-
-    // complete unrolling 
-    if (blockDim.x >= 1024) {
-        if (tid < 512) intermediates[tid] += intermediates[tid + 512];
+    for (unsigned int s = numIntermediates2 / 2; s > 32; s >>= 1) {
+        if (threadIdx.x < s) {
+            intermediates[threadIdx.x] += intermediates[threadIdx.x + s];
+        }
         __syncthreads();
     }
 
-    if (blockDim.x >= 512) {
-        if (tid < 256) intermediates[tid] += intermediates[tid + 256];
-        __syncthreads();
-    }
-
-    if (blockDim.x >= 256) {
-        if (tid < 128) intermediates[tid] += intermediates[tid + 128];
-        __syncthreads();
-    }
-
-    if (blockDim.x >= 128) {
-        if (tid < 64) intermediates[tid] += intermediates[tid + 64];
-        __syncthreads();
-    }
-
+     // Unrolling warp
     if(threadIdx.x < 32){
-        if (blockIdx.x >= 64) intermediates[tid] += intermediates[tid+32];
-        if (blockIdx.x >= 32) intermediates[tid] += intermediates[tid+16];
-        if (blockIdx.x >= 16) intermediates[tid] += intermediates[tid+8];
-        if (blockIdx.x >= 8) intermediates[tid] += intermediates[tid+4];
-        if (blockIdx.x >= 4) intermediates[tid] += intermediates[tid+2];
-        if (blockIdx.x >= 2) intermediates[tid] += intermediates[tid+1];
+        volatile unsigned int* vmem = intermediates;
+        vmem[threadIdx.x] += vmem[threadIdx.x+32];
+        vmem[threadIdx.x] += vmem[threadIdx.x+16];
+        vmem[threadIdx.x] += vmem[threadIdx.x+8];
+        vmem[threadIdx.x] += vmem[threadIdx.x+4];
+        vmem[threadIdx.x] += vmem[threadIdx.x+2];
+        vmem[threadIdx.x] += vmem[threadIdx.x+1];
     }
-
-    //  // Unrolling warp
-    // if(threadIdx.x < 32){
-    //     volatile unsigned int* vmem = intermediates;
-    //     vmem[threadIdx.x] += vmem[threadIdx.x+32];
-    //     vmem[threadIdx.x] += vmem[threadIdx.x+16];
-    //     vmem[threadIdx.x] += vmem[threadIdx.x+8];
-    //     vmem[threadIdx.x] += vmem[threadIdx.x+4];
-    //     vmem[threadIdx.x] += vmem[threadIdx.x+2];
-    //     vmem[threadIdx.x] += vmem[threadIdx.x+1];
-    // }
 
     if (threadIdx.x == 0) {
         deviceIntermediates[0] = intermediates[0];
@@ -293,12 +263,12 @@ void compute_delta2(int *deviceIntermediates,
     }*/
 
     // limit is shared memory size
-    int limit = 256;
+    int limit = 512;
     unsigned int tid = threadIdx.x;
     // divergence at the end!!!!!
     while ((tid + limit) < numIntermediates) {
         deviceIntermediates[tid] += deviceIntermediates[tid + limit];
-        limit += limit;
+        limit += 512;
     }
     //  The number of elements in this array should be equal to
     //  numIntermediates2, the number of threads launched. It *must* be a power
@@ -437,10 +407,10 @@ float** cuda_kmeans(float **objects,      /* in: [numObjs][numCoords] */
 
         if (numReductionThreads>1024) {
             // rewrite the kernel dimenstion for reduction
-            dim3 blockDim = 256;
+            dim3 blockDim = 512;
             dim3 gridDim = numClusterBlocks/blockDim.x + 1;
-            compute_delta2 <<< gridDim, blockDim, 256 * sizeof(unsigned int) >>>
-                (deviceIntermediates, numClusterBlocks, 256);
+            compute_delta2 <<< gridDim, blockDim, 512 * sizeof(unsigned int) >>>
+                (deviceIntermediates, numClusterBlocks, 512);
            //compute_delta2 <<< 1,  numReductionThreads/4, reductionBlockSharedDataSize >>>
               //  (deviceIntermediates, numClusterBlocks, numReductionThreads/4);
             }
