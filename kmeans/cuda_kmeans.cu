@@ -168,7 +168,7 @@ void find_nearest_cluster(int numCoords,
         __syncthreads();    //  For membershipChanged[]
 
         //blockDim.x *must* be a power of two!
-        for (unsigned int s = blockDim.x / 2; s > 64; s >>= 1) {
+        for (unsigned int s = blockDim.x / 2; s > 32; s >>= 1) {
             if (tid < s) {
                 membershipChanged[tid] +=
                     membershipChanged[tid + s];
