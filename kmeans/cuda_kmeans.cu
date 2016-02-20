@@ -42,7 +42,7 @@
 
 #define BLOCKSIZE2 1024
 //#define OUTPUT_SIZE
-#define OUTPUT_TIME 
+//#define OUTPUT_TIME 
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -107,6 +107,101 @@ float euclid_dist_2(int    numCoords,
 
 /*----< find_nearest_cluster() >---------------------------------------------*/
 __global__ static
+void find_nearest_cluster_2333(int numCoords,
+                          int numObjs,
+                          int numClusters,
+                          float *objects,           //  [numCoords][numObjs]
+                          float *deviceClusters,    //  [numCoords][numClusters]
+                          int *membership,          //  [numObjs]
+                          int *intermediates)
+{
+    extern __shared__ char sharedMemory[];
+    unsigned int tid = threadIdx.x;
+
+    //  The type chosen for membershipChanged must be large enough to support
+    //  reductions! There are blockDim.x elements, one for each thread in the
+    //  block.
+    unsigned char *membershipChanged = (unsigned char *)sharedMemory;
+    float *clusters = (float *)(sharedMemory + blockDim.x);
+   
+    membershipChanged[tid] = 0;
+
+    //  BEWARE: We can overrun our shared memory here if there are too many
+    //  clusters or too many coordinates!
+
+    // using CUDA unroll
+    #pragma unroll
+    for (int i = tid; i < numClusters; i += blockDim.x) {
+        for (int j = 0; j < numCoords; j++) {
+            clusters[numClusters * j + i] = deviceClusters[numClusters * j + i];
+        }
+    }
+    __syncthreads();
+
+    int objectId = blockDim.x * blockIdx.x + tid;
+
+    if (objectId < numObjs) {
+        int   index, i, j;
+        float dist, min_dist=1e20;
+
+        /* find the cluster id that has min distance to object */
+        index = 0;
+        
+        for (i=0;i<numClusters;i++){
+            dist = 0;
+#pragma unroll
+            for (int j = 0; j < 8; j++)
+            {
+                float x = objects[numObjs * j + objectId];
+                float y = clusters[numClusters * j + i];
+                dist += (x-y)*(x-y);
+            }
+            if (dist<min_dist){
+                min_dist = dist;
+                index = i;
+            }
+        }
+                
+        if (membership[objectId] != index) {
+            membershipChanged[tid] = 1;
+        }
+        
+        // assign the membership to object objectId 
+        membership[objectId] = index;
+
+        __syncthreads();    //  For membershipChanged[]
+
+        if (blockDim.x >= 128) {
+            if (tid < 64) { 
+                membershipChanged[tid] += membershipChanged[tid + 64]; 
+            }    
+            __syncthreads(); 
+        }
+
+        // Unrolling warp
+        if(tid < 32){
+            volatile unsigned char* vmem = membershipChanged;
+            if (blockDim.x >= 64) vmem[tid] += vmem[tid+32];
+            if (blockDim.x >= 32) vmem[tid] += vmem[tid+16];
+            if (blockDim.x >= 16) vmem[tid] += vmem[tid+8];
+            if (blockDim.x >= 8) vmem[tid] += vmem[tid+4];
+            if (blockDim.x >= 4) vmem[tid] += vmem[tid+2];
+            if (blockDim.x >= 2) vmem[tid] += vmem[tid+1];
+        }
+
+        // only first thread in the grid executes this statement
+        if (tid == 0) {
+            intermediates[blockIdx.x] = membershipChanged[0];
+        }
+
+    }
+}
+
+
+
+
+/*----< find_nearest_cluster() >---------------------------------------------*/
+__global__ static
 void find_nearest_cluster_2(int numCoords,
                           int numObjs,
                           int numClusters,
@@ -146,26 +241,10 @@ void find_nearest_cluster_2(int numCoords,
 
         /* find the cluster id that has min distance to object */
         index = 0;
-
-        /*
-        for (int j = 0; j < numCoords; j++){
-            float x = objects[numObjs * j + objectId];
-            for (i=0;i<numClusters;i++){
-                float y = clusters[numClusters * j + i];
-                dist[i] += (x-y)*(x-y);
-            }
-            min_dist = dist[0];
-            for (i = 1; i < numClusters;i++)
-                if (dist[i]<min_dist){
-                    min_dist = dist[i];
-                    index    = i;
-                }
-        }
-        */
         
         for (i=0;i<numClusters;i++){
             dist = 0;
-#pragma unroll 8
+#pragma unroll 6
             for (int j = 0; j < numCoords; j++)
             {
                 float x = objects[numObjs * j + objectId];
@@ -177,30 +256,12 @@ void find_nearest_cluster_2(int numCoords,
                 index = i;
             }
         }
-        
-        /*
-        
-        min_dist = euclid_dist_2(numCoords, numObjs, numClusters,
-                                 objects, clusters, objectId, 0);
-
-        for (i=1; i<numClusters; i++) {
-            dist = euclid_dist_2(numCoords, numObjs, numClusters,
-                                 objects, clusters, objectId, i);
-            
-            if (dist < min_dist) { 
-                min_dist = dist;
-                index    = i;
-            }
-        }
-*/
-
-
-        
+                
         if (membership[objectId] != index) {
             membershipChanged[tid] = 1;
         }
         
-        /* assign the membership to object objectId */
+        // assign the membership to object objectId 
         membership[objectId] = index;
 
         __syncthreads();    //  For membershipChanged[]
@@ -227,6 +288,7 @@ void find_nearest_cluster_2(int numCoords,
         if (tid == 0) {
             intermediates[blockIdx.x] = membershipChanged[0];
         }
+
     }
 }
 
@@ -625,7 +687,13 @@ float** cuda_kmeans(float **objects,      /* in: [numObjs][numCoords] */
 #ifdef OUTPUT_SIZE
         printf("\nnumClusterBlocks = %d, numThreadPerCB  = %d\n",numClusterBlocks,numThreadsPerClusterBlock);
 #endif
-        find_nearest_cluster_2
+        if (numCoords == 8)
+            find_nearest_cluster_2333
+            <<< numClusterBlocks, numThreadsPerClusterBlock, clusterBlockSharedDataSize >>>
+            (numCoords, numObjs, numClusters,
+             deviceObjects, deviceClusters, deviceMembership, deviceIntermediates);
+        else
+            find_nearest_cluster_2
             <<< numClusterBlocks, numThreadsPerClusterBlock, clusterBlockSharedDataSize >>>
             (numCoords, numObjs, numClusters,
              deviceObjects, deviceClusters, deviceMembership, deviceIntermediates);
