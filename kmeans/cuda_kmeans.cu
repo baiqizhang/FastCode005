@@ -202,39 +202,41 @@ void compute_delta(int *deviceIntermediates,
     //  of two!
     extern __shared__ unsigned int intermediates[];
 
+    tid = threadIdx.x;
+
     //  Copy global intermediate values into shared memory.
-    intermediates[threadIdx.x] =
-        (threadIdx.x < numIntermediates) ? deviceIntermediates[threadIdx.x] : 0;
+    intermediates[tid] =
+        (tid < numIntermediates) ? deviceIntermediates[tid] : 0;
 
     __syncthreads();
 
     //  numIntermediates2 *must* be a power of two!
-    // for (unsigned int s = numIntermediates2 / 2; s > 0; s >>= 1) {
+    for (unsigned int s = numIntermediates2 / 2; s > 0; s >>= 1) {
+        if (tid < s) {
+            intermediates[tid] += intermediates[tid + s];
+        }
+        __syncthreads();
+    }
+
+    // for (unsigned int s = numIntermediates2 / 2; s > 32; s >>= 1) {
     //     if (threadIdx.x < s) {
     //         intermediates[threadIdx.x] += intermediates[threadIdx.x + s];
     //     }
     //     __syncthreads();
     // }
 
-    for (unsigned int s = numIntermediates2 / 2; s > 32; s >>= 1) {
-        if (threadIdx.x < s) {
-            intermediates[threadIdx.x] += intermediates[threadIdx.x + s];
-        }
-        __syncthreads();
-    }
+    //  // Unrolling warp
+    // if (threadIdx.x < 32){
+    //     volatile unsigned int* vmem = intermediates;
+    //     vmem[threadIdx.x] += vmem[threadIdx.x+32];
+    //     vmem[threadIdx.x] += vmem[threadIdx.x+16];
+    //     vmem[threadIdx.x] += vmem[threadIdx.x+8];
+    //     vmem[threadIdx.x] += vmem[threadIdx.x+4];
+    //     vmem[threadIdx.x] += vmem[threadIdx.x+2];
+    //     vmem[threadIdx.x] += vmem[threadIdx.x+1];
+    // }
 
-     // Unrolling warp
-    if (threadIdx.x < 32){
-        volatile unsigned int* vmem = intermediates;
-        vmem[threadIdx.x] += vmem[threadIdx.x+32];
-        vmem[threadIdx.x] += vmem[threadIdx.x+16];
-        vmem[threadIdx.x] += vmem[threadIdx.x+8];
-        vmem[threadIdx.x] += vmem[threadIdx.x+4];
-        vmem[threadIdx.x] += vmem[threadIdx.x+2];
-        vmem[threadIdx.x] += vmem[threadIdx.x+1];
-    }
-
-    if (threadIdx.x == 0) {
+    if (tid == 0) {
         deviceIntermediates[0] = intermediates[0];
     }
 }
@@ -286,30 +288,30 @@ void compute_delta2(int *deviceIntermediates,
     extern __shared__ unsigned int intermediates[];
 
     //  Copy global intermediate values into shared memory.
-    intermediates[threadIdx.x] = deviceIntermediates[threadIdx.x];
+    intermediates[tid] = deviceIntermediates[tid];
 
     __syncthreads();
 
     //  numIntermediates2 *must* be a power of two!
     for (unsigned int s = numIntermediates2 / 2; s > 32; s >>= 1) {
-        if (threadIdx.x < s) {
-            intermediates[threadIdx.x] += intermediates[threadIdx.x + s];
+        if (tid < s) {
+            intermediates[tid] += intermediates[tid + s];
         }
         __syncthreads();
     }
 
      // Unrolling warp
-    if (threadIdx.x < 32){
+    if (tid < 32){
         volatile unsigned int* vmem = intermediates;
-        vmem[threadIdx.x] += vmem[threadIdx.x+32];
-        vmem[threadIdx.x] += vmem[threadIdx.x+16];
-        vmem[threadIdx.x] += vmem[threadIdx.x+8];
-        vmem[threadIdx.x] += vmem[threadIdx.x+4];
-        vmem[threadIdx.x] += vmem[threadIdx.x+2];
-        vmem[threadIdx.x] += vmem[threadIdx.x+1];
+        vmem[tid] += vmem[tid+32];
+        vmem[tid] += vmem[tid+16];
+        vmem[tid] += vmem[tid+8];
+        vmem[tid] += vmem[tid+4];
+        vmem[tid] += vmem[tid+2];
+        vmem[tid] += vmem[tid+1];
     }
 
-    if (threadIdx.x == 0) {
+    if (tid == 0) {
         deviceIntermediates[0] = intermediates[0];
     }
     
