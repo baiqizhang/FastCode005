@@ -180,6 +180,7 @@ void find_nearest_cluster(int numCoords,
             }
             __syncthreads();
         }
+        
         // Unrolling warp
         if(threadIdx.x < 32){
             volatile unsigned char* vmem = membershipChanged;
