@@ -430,7 +430,9 @@ float** cuda_kmeans(float **objects,      /* in: [numObjs][numCoords] */
               //  (deviceIntermediates, numClusterBlocks, numReductionThreads/4);
             }
         else
-            compute_delta <<< 1, numReductionThreads, reductionBlockSharedDataSize >>>
+            dim3 blockDim = numReductionThreads;
+            dim3 gridDim = numClusterBlocks/blockDim.x + 1;
+            compute_delta <<< gridDim, blockDim, reductionBlockSharedDataSize >>>
                 (deviceIntermediates, numClusterBlocks, numReductionThreads);
 
         cudaThreadSynchronize(); checkLastCudaError();
