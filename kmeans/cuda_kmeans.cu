@@ -113,6 +113,7 @@ void find_nearest_cluster(int numCoords,
                           int *intermediates)
 {
     extern __shared__ char sharedMemory[];
+    tid = threadIdx.x;
 
     //  The type chosen for membershipChanged must be large enough to support
     //  reductions! There are blockDim.x elements, one for each thread in the
@@ -127,7 +128,7 @@ void find_nearest_cluster(int numCoords,
 
     // using CUDA unroll
     #pragma unroll
-    for (int i = threadIdx.x; i < numClusters; i += blockDim.x) {
+    for (int i = tid; i < numClusters; i += blockDim.x) {
         for (int j = 0; j < numCoords; j++) {
             clusters[numClusters * j + i] = deviceClusters[numClusters * j + i];
         }
@@ -156,7 +157,7 @@ void find_nearest_cluster(int numCoords,
         }
 
         if (membership[objectId] != index) {
-            membershipChanged[threadIdx.x] = 1;
+            membershipChanged[tid] = 1;
         }
 
         /* assign the membership to object objectId */
@@ -166,9 +167,9 @@ void find_nearest_cluster(int numCoords,
 
         //  blockDim.x *must* be a power of two!
         for (unsigned int s = blockDim.x / 2; s > 32; s >>= 1) {
-            if (threadIdx.x < s) {
-                membershipChanged[threadIdx.x] +=
-                    membershipChanged[threadIdx.x + s];
+            if (tid < s) {
+                membershipChanged[tid] +=
+                    membershipChanged[tid + s];
             }
             __syncthreads();
         }
@@ -176,16 +177,16 @@ void find_nearest_cluster(int numCoords,
         // Unrolling warp
         if(threadIdx.x < 32){
             volatile unsigned char* vmem = membershipChanged;
-            vmem[threadIdx.x] += vmem[threadIdx.x+32];
-            vmem[threadIdx.x] += vmem[threadIdx.x+16];
-            vmem[threadIdx.x] += vmem[threadIdx.x+8];
-            vmem[threadIdx.x] += vmem[threadIdx.x+4];
-            vmem[threadIdx.x] += vmem[threadIdx.x+2];
-            vmem[threadIdx.x] += vmem[threadIdx.x+1];
+            vmem[tid] += vmem[tid+32];
+            vmem[tid] += vmem[tid+16];
+            vmem[tid] += vmem[tid+8];
+            vmem[tid] += vmem[tid+4];
+            vmem[tid] += vmem[tid+2];
+            vmem[tid] += vmem[tid+1];
         }
 
         // only first thread in the grid executes this statement
-        if (threadIdx.x == 0) {
+        if (tid == 0) {
             intermediates[blockIdx.x] = membershipChanged[0];
         }
     }
