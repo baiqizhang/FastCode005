@@ -208,11 +208,29 @@ void compute_delta(int *deviceIntermediates,
     __syncthreads();
 
     //  numIntermediates2 *must* be a power of two!
-    for (unsigned int s = numIntermediates2 / 2; s > 0; s >>= 1) {
+    // for (unsigned int s = numIntermediates2 / 2; s > 0; s >>= 1) {
+    //     if (threadIdx.x < s) {
+    //         intermediates[threadIdx.x] += intermediates[threadIdx.x + s];
+    //     }
+    //     __syncthreads();
+    // }
+
+    for (unsigned int s = numIntermediates2 / 2; s > 32; s >>= 1) {
         if (threadIdx.x < s) {
             intermediates[threadIdx.x] += intermediates[threadIdx.x + s];
         }
         __syncthreads();
+    }
+
+     // Unrolling warp
+    if(threadIdx.x < 32){
+        volatile unsigned int* vmem = intermediates;
+        vmem[threadIdx.x] += vmem[threadIdx.x+32];
+        vmem[threadIdx.x] += vmem[threadIdx.x+16];
+        vmem[threadIdx.x] += vmem[threadIdx.x+8];
+        vmem[threadIdx.x] += vmem[threadIdx.x+4];
+        vmem[threadIdx.x] += vmem[threadIdx.x+2];
+        vmem[threadIdx.x] += vmem[threadIdx.x+1];
     }
 
     if (threadIdx.x == 0) {
@@ -280,7 +298,7 @@ void compute_delta2(int *deviceIntermediates,
     }
 
      // Unrolling warp
-    if(threadIdx.x < 32){
+    if (threadIdx.x < 32){
         volatile unsigned int* vmem = intermediates;
         vmem[threadIdx.x] += vmem[threadIdx.x+32];
         vmem[threadIdx.x] += vmem[threadIdx.x+16];
@@ -403,6 +421,7 @@ float** cuda_kmeans(float **objects,      /* in: [numObjs][numCoords] */
 
         if (numReductionThreads>1024) {
             // rewrite the kernel dimenstion for reduction
+            //blockDim must equal limit in compute_delta2!
             dim3 blockDim = 256;
             dim3 gridDim = numClusterBlocks/blockDim.x + 1;
             compute_delta2 <<< gridDim, blockDim, 256 * sizeof(unsigned int) >>>
