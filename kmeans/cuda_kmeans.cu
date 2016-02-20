@@ -275,6 +275,7 @@ void compute_delta2(int *deviceIntermediates,
     // }
 
     // try complete unrolling
+    // Since we know numIntermediates2==1024, no need for judgments
     //if (numIntermediates2 >= 1024) {
         if (tid < 512) { 
             intermediates[tid] += intermediates[tid + 512]; 
@@ -300,15 +301,17 @@ void compute_delta2(int *deviceIntermediates,
         __syncthreads(); 
     //}
 
+    int a,b,c,d,e,f;
      // Unrolling warp
     if (tid < 32){
         volatile unsigned int* vmem = intermediates;
-        vmem[tid] += vmem[tid+32];
-        vmem[tid] += vmem[tid+16];
-        vmem[tid] += vmem[tid+8];
-        vmem[tid] += vmem[tid+4];
-        vmem[tid] += vmem[tid+2];
-        vmem[tid] += vmem[tid+1];
+        a = vmem[tid+32];
+        b = vmem[tid+16];
+        c = vmem[tid+8];
+        d = vmem[tid+4];
+        e = vmem[tid+2];
+        f = vmem[tid+1];
+        vmem[tid] = a+b+c+d+e+f;
     }
 
     if (tid == 0) {
