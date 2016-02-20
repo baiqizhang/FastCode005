@@ -165,12 +165,30 @@ void find_nearest_cluster(int numCoords,
         __syncthreads();    //  For membershipChanged[]
 
         //  blockDim.x *must* be a power of two!
-        for (unsigned int s = blockDim.x / 2; s > 0; s >>= 1) {
+        // for (unsigned int s = blockDim.x / 2; s > 0; s >>= 1) {
+        //     if (threadIdx.x < s) {
+        //         membershipChanged[threadIdx.x] +=
+        //             membershipChanged[threadIdx.x + s];
+        //     }
+        //     __syncthreads();
+        // }
+
+        for (unsigned int s = blockDim.x / 2; s > 32; s >>= 1) {
             if (threadIdx.x < s) {
                 membershipChanged[threadIdx.x] +=
                     membershipChanged[threadIdx.x + s];
             }
             __syncthreads();
+        }
+        // Unrolling warp
+        if(threadIdx.x < 32){
+            volatile unsigned char* vmem = membershipChanged;
+            vmem[threadIdx.x] += vmem[threadIdx.x+32];
+            vmem[threadIdx.x] += vmem[threadIdx.x+16];
+            vmem[threadIdx.x] += vmem[threadIdx.x+8];
+            vmem[threadIdx.x] += vmem[threadIdx.x+4];
+            vmem[threadIdx.x] += vmem[threadIdx.x+2];
+            vmem[threadIdx.x] += vmem[threadIdx.x+1];
         }
 
         // only first thread in the grid executes this statement
