@@ -261,48 +261,12 @@ void compute_delta2(int *deviceIntermediates,
     if (threadIdx.x == 0) {
         deviceIntermediates[0] = intermediates[0]*8;
     }*/
-
-    // limit is shared memory size
-    int limit = 512;
-    unsigned int tid = threadIdx.x;
-    // divergence at the end!!!!!
-    while ((tid + limit) < numIntermediates) {
-        deviceIntermediates[tid] += deviceIntermediates[tid + limit];
-        limit += 512;
-    }
-    //  The number of elements in this array should be equal to
-    //  numIntermediates2, the number of threads launched. It *must* be a power
-    //  of two!
-    extern __shared__ unsigned int intermediates[];
-
-    //  Copy global intermediate values into shared memory.
-    intermediates[threadIdx.x] = deviceIntermediates[threadIdx.x];
-
-    __syncthreads();
-
-    //  numIntermediates2 *must* be a power of two!
-    for (unsigned int s = numIntermediates2 / 2; s > 32; s >>= 1) {
-        if (threadIdx.x < s) {
-            intermediates[threadIdx.x] += intermediates[threadIdx.x + s];
-        }
-        __syncthreads();
-    }
-
-     // Unrolling warp
-    if(threadIdx.x < 32){
-        volatile unsigned int* vmem = intermediates;
-        vmem[threadIdx.x] += vmem[threadIdx.x+32];
-        vmem[threadIdx.x] += vmem[threadIdx.x+16];
-        vmem[threadIdx.x] += vmem[threadIdx.x+8];
-        vmem[threadIdx.x] += vmem[threadIdx.x+4];
-        vmem[threadIdx.x] += vmem[threadIdx.x+2];
-        vmem[threadIdx.x] += vmem[threadIdx.x+1];
-    }
-
-    if (threadIdx.x == 0) {
-        deviceIntermediates[0] = intermediates[0];
-    }
+    
+    for (unsigned int s = 1; s < numIntermediates; s++) 
+        deviceIntermediates[0]+=deviceIntermediates[s];
+    
 }
+
 
 /*----< cuda_kmeans() >-------------------------------------------------------*/
 //
@@ -405,15 +369,11 @@ float** cuda_kmeans(float **objects,      /* in: [numObjs][numCoords] */
 
         cudaThreadSynchronize(); checkLastCudaError();
 
-        if (numReductionThreads>1024) {
-            // rewrite the kernel dimenstion for reduction
-            dim3 blockDim = 512;
-            dim3 gridDim = numClusterBlocks/blockDim.x + 1;
-            compute_delta2 <<< gridDim, blockDim, 512 * sizeof(unsigned int) >>>
-                (deviceIntermediates, numClusterBlocks, 512);
+        if (numReductionThreads>1024)
+            compute_delta2 <<< 1, 1, reductionBlockSharedDataSize >>>
+                (deviceIntermediates, numClusterBlocks, numReductionThreads);
            //compute_delta2 <<< 1,  numReductionThreads/4, reductionBlockSharedDataSize >>>
               //  (deviceIntermediates, numClusterBlocks, numReductionThreads/4);
-            }
         else
             compute_delta <<< 1, numReductionThreads, reductionBlockSharedDataSize >>>
                 (deviceIntermediates, numClusterBlocks, numReductionThreads);
