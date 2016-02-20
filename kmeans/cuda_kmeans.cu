@@ -168,7 +168,7 @@ void find_nearest_cluster(int numCoords,
         __syncthreads();    //  For membershipChanged[]
 
         //blockDim.x *must* be a power of two!
-        for (unsigned int s = blockDim.x / 2; s > 128; s >>= 1) {
+        for (unsigned int s = blockDim.x / 2; s > 64; s >>= 1) {
             if (tid < s) {
                 membershipChanged[tid] +=
                     membershipChanged[tid + s];
@@ -195,12 +195,12 @@ void find_nearest_cluster(int numCoords,
             } 
             __syncthreads(); 
         }*/
-        if (blockDim.x >= 128) {
-            if (tid < 64) { 
-                intermediates[tid] += intermediates[tid + 64]; 
-            }    
-            __syncthreads(); 
-        }
+        // if (blockDim.x >= 128) {
+        //     if (tid < 64) { 
+        //         intermediates[tid] += intermediates[tid + 64]; 
+        //     }    
+        //     __syncthreads(); 
+        // }
 
         // Unrolling warp
         if(tid < 32){
