@@ -176,24 +176,24 @@ void find_nearest_cluster(int numCoords,
             __syncthreads();
         }*/
 
-        if (blockDim.x >= 1024) {
-            if (tid < 512) { 
-                membershipChanged[tid] += membershipChanged[tid + 512]; 
-            } 
-            __syncthreads(); 
-        }
-        if (blockDim.x >= 512) {
-            if (tid < 256) { 
-                membershipChanged[tid] += membershipChanged[tid + 256]; 
-            }    
-            __syncthreads(); 
-        }
-        if (blockDim.x >= 256) {
-            if (tid < 128) { 
-                membershipChanged[tid] += membershipChanged[tid + 128]; 
-            } 
-            __syncthreads(); 
-        }
+        // if (blockDim.x >= 1024) {
+        //     if (tid < 512) { 
+        //         membershipChanged[tid] += membershipChanged[tid + 512]; 
+        //     } 
+        //     __syncthreads(); 
+        // }
+        // if (blockDim.x >= 512) {
+        //     if (tid < 256) { 
+        //         membershipChanged[tid] += membershipChanged[tid + 256]; 
+        //     }    
+        //     __syncthreads(); 
+        // }
+        // if (blockDim.x >= 256) {
+        //     if (tid < 128) { 
+        //         membershipChanged[tid] += membershipChanged[tid + 128]; 
+        //     } 
+        //     __syncthreads(); 
+        // }
         if (blockDim.x >= 128) {
             if (tid < 64) { 
                 membershipChanged[tid] += membershipChanged[tid + 64]; 
