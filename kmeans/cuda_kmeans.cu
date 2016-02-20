@@ -42,7 +42,7 @@
 
 #define BLOCKSIZE2 1024
 //#define OUTPUT_SIZE
-//#define OUTPUT_TIME 
+#define OUTPUT_TIME 
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -154,6 +154,12 @@ void find_nearest_cluster_2(int numCoords,
                 float y = clusters[numClusters * j + i];
                 dist[i] += (x-y)*(x-y);
             }
+            min_dist = dist[0];
+            for (i = 1; i < numClusters;i++)
+                if (dist[i]<min_dist){
+                    min_dist = dist[i];
+                    index    = i;
+                }
         }
         */
         
@@ -172,14 +178,6 @@ void find_nearest_cluster_2(int numCoords,
             }
         }
         
-/*        
-        min_dist = dist[0];
-        for (i = 1; i < numClusters;i++)
-            if (dist[i]<min_dist){
-                min_dist = dist[i];
-                index    = i;
-            }
-*/
         /*
         
         min_dist = euclid_dist_2(numCoords, numObjs, numClusters,
