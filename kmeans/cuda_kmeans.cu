@@ -113,7 +113,7 @@ void find_nearest_cluster(int numCoords,
                           int *intermediates)
 {
     extern __shared__ char sharedMemory[];
-    tid = threadIdx.x;
+    unsigned int tid = threadIdx.x;
 
     //  The type chosen for membershipChanged must be large enough to support
     //  reductions! There are blockDim.x elements, one for each thread in the
@@ -202,7 +202,7 @@ void compute_delta(int *deviceIntermediates,
     //  of two!
     extern __shared__ unsigned int intermediates[];
 
-    tid = threadIdx.x;
+    unsigned int tid = threadIdx.x;
 
     //  Copy global intermediate values into shared memory.
     intermediates[tid] =
