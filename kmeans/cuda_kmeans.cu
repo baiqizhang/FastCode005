@@ -41,12 +41,13 @@
 // -----------------------------------------------------------------------------
 
 #define BLOCKSIZE2 1024
+//#define OUTPUT_SIZE
+//#define OUTPUT_TIME 
 
 #include <stdio.h>
 #include <stdlib.h>
-
+#include <sys/time.h>
 #include "kmeans.h"
-
 static inline int nextPowerOfTwo(int n) {
     n--;
 
@@ -59,7 +60,6 @@ static inline int nextPowerOfTwo(int n) {
 
     return ++n;
 }
-
 /*----< euclid_dist_2() >----------------------------------------------------*/
 /* square of Euclid distance between two multi-dimensional points            */
 __host__ __device__ inline static
@@ -103,6 +103,137 @@ float euclid_dist_2(int    numCoords,
 
     return(ans);
 }
+
+
+/*----< find_nearest_cluster() >---------------------------------------------*/
+__global__ static
+void find_nearest_cluster_2(int numCoords,
+                          int numObjs,
+                          int numClusters,
+                          float *objects,           //  [numCoords][numObjs]
+                          float *deviceClusters,    //  [numCoords][numClusters]
+                          int *membership,          //  [numObjs]
+                          int *intermediates)
+{
+    extern __shared__ char sharedMemory[];
+    unsigned int tid = threadIdx.x;
+
+    //  The type chosen for membershipChanged must be large enough to support
+    //  reductions! There are blockDim.x elements, one for each thread in the
+    //  block.
+    unsigned char *membershipChanged = (unsigned char *)sharedMemory;
+    float *clusters = (float *)(sharedMemory + blockDim.x);
+   
+    membershipChanged[tid] = 0;
+
+    //  BEWARE: We can overrun our shared memory here if there are too many
+    //  clusters or too many coordinates!
+
+    // using CUDA unroll
+    #pragma unroll
+    for (int i = tid; i < numClusters; i += blockDim.x) {
+        for (int j = 0; j < numCoords; j++) {
+            clusters[numClusters * j + i] = deviceClusters[numClusters * j + i];
+        }
+    }
+    __syncthreads();
+
+    int objectId = blockDim.x * blockIdx.x + tid;
+
+    if (objectId < numObjs) {
+        int   index, i, j;
+        float dist, min_dist=1e20;
+
+        /* find the cluster id that has min distance to object */
+        index = 0;
+
+        /*
+        for (int j = 0; j < numCoords; j++){
+            float x = objects[numObjs * j + objectId];
+            for (i=0;i<numClusters;i++){
+                float y = clusters[numClusters * j + i];
+                dist[i] += (x-y)*(x-y);
+            }
+        }
+        */
+        
+        for (i=0;i<numClusters;i++){
+            dist = 0;
+#pragma unroll 8
+            for (int j = 0; j < numCoords; j++)
+            {
+                float x = objects[numObjs * j + objectId];
+                float y = clusters[numClusters * j + i];
+                dist += (x-y)*(x-y);
+            }
+            if (dist<min_dist){
+                min_dist = dist;
+                index = i;
+            }
+        }
+        
+/*        
+        min_dist = dist[0];
+        for (i = 1; i < numClusters;i++)
+            if (dist[i]<min_dist){
+                min_dist = dist[i];
+                index    = i;
+            }
+*/
+        /*
+        
+        min_dist = euclid_dist_2(numCoords, numObjs, numClusters,
+                                 objects, clusters, objectId, 0);
+
+        for (i=1; i<numClusters; i++) {
+            dist = euclid_dist_2(numCoords, numObjs, numClusters,
+                                 objects, clusters, objectId, i);
+            
+            if (dist < min_dist) { 
+                min_dist = dist;
+                index    = i;
+            }
+        }
+*/
+
+
+        
+        if (membership[objectId] != index) {
+            membershipChanged[tid] = 1;
+        }
+        
+        /* assign the membership to object objectId */
+        membership[objectId] = index;
+
+        __syncthreads();    //  For membershipChanged[]
+
+        if (blockDim.x >= 128) {
+            if (tid < 64) { 
+                membershipChanged[tid] += membershipChanged[tid + 64]; 
+            }    
+            __syncthreads(); 
+        }
+
+        // Unrolling warp
+        if(tid < 32){
+            volatile unsigned char* vmem = membershipChanged;
+            if (blockDim.x >= 64) vmem[tid] += vmem[tid+32];
+            if (blockDim.x >= 32) vmem[tid] += vmem[tid+16];
+            if (blockDim.x >= 16) vmem[tid] += vmem[tid+8];
+            if (blockDim.x >= 8) vmem[tid] += vmem[tid+4];
+            if (blockDim.x >= 4) vmem[tid] += vmem[tid+2];
+            if (blockDim.x >= 2) vmem[tid] += vmem[tid+1];
+        }
+
+        // only first thread in the grid executes this statement
+        if (tid == 0) {
+            intermediates[blockIdx.x] = membershipChanged[0];
+        }
+    }
+}
+
+
+
 
 /*----< find_nearest_cluster() >---------------------------------------------*/
 __global__ static
@@ -486,15 +617,30 @@ float** cuda_kmeans(float **objects,      /* in: [numObjs][numCoords] */
               numObjs*sizeof(int), cudaMemcpyHostToDevice));
 
     do {
+#ifdef OUTPUT_TIME
+    struct timeval tval_before, tval_after, tval_result;
+    gettimeofday(&tval_before, NULL);
+#endif
+
         checkCuda(cudaMemcpy(deviceClusters, dimClusters[0],
                   numClusters*numCoords*sizeof(float), cudaMemcpyHostToDevice));
-
-        find_nearest_cluster
+#ifdef OUTPUT_SIZE
+        printf("\nnumClusterBlocks = %d, numThreadPerCB  = %d\n",numClusterBlocks,numThreadsPerClusterBlock);
+#endif
+        find_nearest_cluster_2
             <<< numClusterBlocks, numThreadsPerClusterBlock, clusterBlockSharedDataSize >>>
             (numCoords, numObjs, numClusters,
              deviceObjects, deviceClusters, deviceMembership, deviceIntermediates);
 
         cudaThreadSynchronize(); checkLastCudaError();
+#ifdef OUTPUT_TIME
+    gettimeofday(&tval_after, NULL);
+    timersub(&tval_after, &tval_before, &tval_result);
+    printf(" %ld.%06ld\t", (long int)tval_result.tv_sec, (long int)tval_result.tv_usec);
+    
+    gettimeofday(&tval_before, NULL);
+#endif
+
 
         if (numReductionThreads==4096) {
             // rewrite the kernel dimenstion for reduction
@@ -519,8 +665,8 @@ float** cuda_kmeans(float **objects,      /* in: [numObjs][numCoords] */
                 (deviceIntermediates, numClusterBlocks, BLOCKSIZE2);
         }
 
-        cudaThreadSynchronize(); checkLastCudaError();
-
+        cudaThreadSynchronize(); //checkLastCudaError();
+ 
         int d;
         checkCuda(cudaMemcpy(&d, deviceIntermediates,
                   sizeof(int), cudaMemcpyDeviceToHost));
@@ -528,6 +674,14 @@ float** cuda_kmeans(float **objects,      /* in: [numObjs][numCoords] */
 
         checkCuda(cudaMemcpy(membership, deviceMembership,
                   numObjs*sizeof(int), cudaMemcpyDeviceToHost));
+
+#ifdef OUTPUT_TIME        
+    gettimeofday(&tval_after, NULL);
+    timersub(&tval_after, &tval_before, &tval_result);
+    printf(" %ld.%06ld\t", (long int)tval_result.tv_sec, (long int)tval_result.tv_usec);
+    
+    gettimeofday(&tval_before, NULL);
+#endif
 
         for (i=0; i<numObjs; i++) {
             /* find the array index of nestest cluster center */
@@ -550,7 +704,12 @@ float** cuda_kmeans(float **objects,      /* in: [numObjs][numCoords] */
             }
             newClusterSize[i] = 0;   /* set back to 0 */
         }
-        //printf("\ndelta:%f\n",delta);
+#ifdef OUTPUT_TIME        
+    gettimeofday(&tval_after, NULL);
+    timersub(&tval_after, &tval_before, &tval_result);
+    printf(", %ld.%06ld\n", (long int)tval_result.tv_sec, (long int)tval_result.tv_usec);
+#endif
+    //printf("\ndelta:%f\n",delta);
         delta /= numObjs;
     } while (delta > threshold && loop++ < 500);
 
