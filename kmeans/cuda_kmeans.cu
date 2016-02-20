@@ -248,14 +248,27 @@ void compute_delta2(int *deviceIntermediates,
                    int numIntermediates,    //  The actual number of intermediates
                    int numIntermediates2)   //  The next power of two
 {
+    // numIntermediates is 3817
+
     // limit is shared memory size
     int limit = BLOCKSIZE2;
     unsigned int tid = threadIdx.x;
-    // divergence at the end!!!!!
+    /*
     while ((tid + limit) < numIntermediates) {
         deviceIntermediates[tid] += deviceIntermediates[tid + limit];
         limit += BLOCKSIZE2;
+    }*/
+    //printf("%d", numIntermediates);
+    // If BLOCKSIZE2 == 1024, HARD CODE HERE
+    deviceIntermediates[tid] += deviceIntermediates[tid + 1024]; 
+    deviceIntermediates[tid] += deviceIntermediates[tid + 2048];
+    //deviceIntermediates[tid] += deviceIntermediates[tid + 3072];
+    if(tid + 3072 < numIntermediates){
+        deviceIntermediates[tid] += deviceIntermediates[tid + 3072];
     }
+
+
+
     //  The number of elements in this array should be equal to
     //  numIntermediates2, the number of threads launched. It *must* be a power
     //  of two!
@@ -318,6 +331,43 @@ void compute_delta2(int *deviceIntermediates,
     
     // for (unsigned int s = 1; s < numIntermediates; s++) 
     //     deviceIntermediates[0]+=deviceIntermediates[s];
+    
+}
+
+__global__ static
+void compute_delta3(int *deviceIntermediates,
+                   int numIntermediates,    //  The actual number of intermediates
+                   int numIntermediates2)   //  The next power of two
+{
+    // limit is shared memory size
+    int limit = BLOCKSIZE2;
+    unsigned int tid = threadIdx.x;
+    // divergence at the end!!!!!
+    while ((tid + limit) < numIntermediates) {
+        deviceIntermediates[tid] += deviceIntermediates[tid + limit];
+        limit += BLOCKSIZE2;
+    }
+    //  The number of elements in this array should be equal to
+    //  numIntermediates2, the number of threads launched. It *must* be a power
+    //  of two!
+    extern __shared__ unsigned int intermediates[];
+
+    //  Copy global intermediate values into shared memory.
+    intermediates[tid] = deviceIntermediates[tid];
+
+    __syncthreads();
+
+    //numIntermediates2 *must* be a power of two!
+    for (unsigned int s = numIntermediates2 / 2; s > 0; s >>= 1) {
+        if (tid < s) {
+            intermediates[tid] += intermediates[tid + s];
+        }
+        __syncthreads();
+    }
+        if (tid == 0) {
+        deviceIntermediates[0] = intermediates[0];
+    }
+   
     
 }
 
@@ -423,7 +473,7 @@ float** cuda_kmeans(float **objects,      /* in: [numObjs][numCoords] */
 
         cudaThreadSynchronize(); checkLastCudaError();
 
-        if (numReductionThreads>1024) {
+        if (numReductionThreads==4096) {
             // rewrite the kernel dimenstion for reduction
             //blockDim must equal limit in compute_delta2!
             dim3 blockDim = BLOCKSIZE2;
@@ -433,12 +483,18 @@ float** cuda_kmeans(float **objects,      /* in: [numObjs][numCoords] */
            //compute_delta2 <<< 1,  numReductionThreads/4, reductionBlockSharedDataSize >>>
               //  (deviceIntermediates, numClusterBlocks, numReductionThreads/4);
             }
-        else {
+        else if (numReductionThreads < 1024) {
             dim3 blockDim = numReductionThreads;
             dim3 gridDim = numClusterBlocks/blockDim.x + 1;
             compute_delta <<< gridDim, blockDim, reductionBlockSharedDataSize >>>
                 (deviceIntermediates, numClusterBlocks, numReductionThreads);
             }
+        else{
+            dim3 blockDim = BLOCKSIZE2;
+            dim3 gridDim = numClusterBlocks/blockDim.x + 1;
+            compute_delta3 <<< gridDim, blockDim, BLOCKSIZE2 * sizeof(unsigned int) >>>
+                (deviceIntermediates, numClusterBlocks, BLOCKSIZE2);
+        }
 
         cudaThreadSynchronize(); checkLastCudaError();
 
