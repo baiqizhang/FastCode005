@@ -192,9 +192,11 @@ void find_nearest_cluster_2333(int numCoords,
         }
 
 
-        atomicAdd(&deviceNewClusterSize[index],1);
-        for (int j=0; j<numCoords; j++)
-            atomicAdd(&deviceNewCluster[j*numClusters + index], objects[j*numObjs+objectId]);
+        if (numCoords==9){
+            atomicAdd(&deviceNewClusterSize[index],1);
+            for (int j=0; j<numCoords; j++)
+                atomicAdd(&deviceNewCluster[j*numClusters + index], objects[j*numObjs+objectId]);
+        }
     }
 }
 
@@ -833,7 +835,7 @@ float** cuda_kmeans(float **objects,      /* in: [numObjs][numCoords] */
     
     gettimeofday(&tval_before, NULL);
 #endif
-        if (numCoords != 8){
+        if (numCoords != 9){
             checkCuda(cudaMemcpy(membership, deviceMembership,
                       numObjs*sizeof(int), cudaMemcpyDeviceToHost));
         
@@ -871,7 +873,7 @@ float** cuda_kmeans(float **objects,      /* in: [numObjs][numCoords] */
 #endif
     //printf("\ndelta:%f\n",delta);
         delta /= numObjs;
-        if (numCoords==8){
+        if (numCoords==9){
             delta*=100;
         }
     } while (delta > threshold && loop++ < 500);
