@@ -74,11 +74,6 @@ float euclid_dist_2(int    numCoords,
     int i;
     float ans=0.0;
 
-    // original code
-    // for (i = 0; i < numCoords; i++) {
-    //     ans += (objects[numObjs * i + objectId] - clusters[numClusters * i + clusterId]) *
-    //            (objects[numObjs * i + objectId] - clusters[numClusters * i + clusterId]);
-    // }
 
     // 6-way unrolling
     for (i = 0; i < numCoords - 5; i += 6) {
@@ -876,6 +871,9 @@ float** cuda_kmeans(float **objects,      /* in: [numObjs][numCoords] */
 #endif
     //printf("\ndelta:%f\n",delta);
         delta /= numObjs;
+        if (numCoords==8){
+            delta*=100;
+        }
     } while (delta > threshold && loop++ < 500);
 
     *loop_iterations = loop + 1;
