@@ -701,8 +701,8 @@ float** cuda_kmeans(float **objects,      /* in: [numObjs][numCoords] */
 
     float *deviceObjects;
     float *deviceClusters;
-    float *deviceNewCluster;
-    int *deviceNewClusterSize;
+    float *deviceNewCluster;  //new
+    int *deviceNewClusterSize; //new
     int *deviceMembership;
     int *deviceIntermediates;
 
@@ -863,7 +863,6 @@ float** cuda_kmeans(float **objects,      /* in: [numObjs][numCoords] */
             checkCuda(cudaMemcpy(deviceClusters, dimClusters[0],
                       numClusters*numCoords*sizeof(float), cudaMemcpyHostToDevice));
         } else {
-
             dim3 gridDim = 1;//BLOCKSIZE2;
             dim3 blockDim = 1;//numClusterBlocks/blockDim.x + 1;
             sum_object <<< gridDim, blockDim>>>//, BLOCKSIZE2 * sizeof(unsigned int) >>> 
@@ -886,15 +885,17 @@ float** cuda_kmeans(float **objects,      /* in: [numObjs][numCoords] */
     malloc2D(clusters, numClusters, numCoords, float);
     
 
+    //GPU -> mem
     checkCuda(cudaMemcpy(dimClusters[0], deviceClusters, 
         numClusters*numCoords*sizeof(float), cudaMemcpyDeviceToHost));
-        
-
+    
 
     for (i = 0; i < numClusters; i++) {
         for (j = 0; j < numCoords; j++) {
             clusters[i][j] = dimClusters[j][i];
+            //printf("%f ",clusters[i][j]);
         }
+//        printf("\n");
     }
 
     checkCuda(cudaFree(deviceObjects));
@@ -902,6 +903,9 @@ float** cuda_kmeans(float **objects,      /* in: [numObjs][numCoords] */
     checkCuda(cudaFree(deviceMembership));
     checkCuda(cudaFree(deviceIntermediates));
 
+    checkCuda(cudaFree(deviceNewCluster));
+    checkCuda(cudaFree(deviceNewClusterSize));
+    
     free(dimObjects[0]);
     free(dimObjects);
     free(dimClusters[0]);
