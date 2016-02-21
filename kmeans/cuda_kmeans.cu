@@ -585,6 +585,44 @@ void compute_delta3(int *deviceIntermediates,
     
 }
 
+__global__ static
+void sum_object(int *deviceMembership,
+                float *deviceObjects,
+                int *deviceNewClusterSize,
+                float *deviceNewCluster,
+                int numObjs,
+                int numCoords,
+                int numClusters   )
+{
+        // #pragma omp parallel for
+        // for (i=0; i<numObjs; i++) {
+        //     /* find the array index of nestest cluster center */
+        //     index = membership[i];
+
+        //      
+        //     newClusterSize[index]++;
+        //     #pragma omp parallel for
+        //     for (j=0; j<numCoords; j++)
+        //         newClusters[j][index] += objects[i][j];
+        // }
+
+
+    int limit = BLOCKSIZE2;
+    unsigned int tid = threadIdx.x;
+    unsigned int counter;
+
+    for(counter = tid; counter< numObjs; counter += limit){
+        int index = deviceMembership[counter];
+        deviceNewClusterSize[index]++;
+        int j;
+        for(j = 0; j < numCoords; j++){
+            //printf("%d %d \n%d %d %d %d %d\n", numObjs, numCoords, counter, j, index, j*numObjs + index, counter*numCoords + j);
+            deviceNewCluster[j*numClusters + index] += deviceObjects[counter*numCoords + j];
+            //deviceObjects[0] += deviceObjects[counter*numCoords + j];
+        }
+    }
+}
+
 
 /*----< cuda_kmeans() >-------------------------------------------------------*/
 //
@@ -620,12 +658,15 @@ float** cuda_kmeans(float **objects,      /* in: [numObjs][numCoords] */
 
     float *deviceObjects;
     float *deviceClusters;
+    float *deviceNewCluster;
+    int *deviceNewClusterSize;
     int *deviceMembership;
     int *deviceIntermediates;
 
     //  Copy objects given in [numObjs][numCoords] layout to new
     //  [numCoords][numObjs] layout
     malloc2D(dimObjects, numCoords, numObjs, float);
+    #pragma omp parallel for
     for (i = 0; i < numCoords; i++) {
         for (j = 0; j < numObjs; j++) {
             dimObjects[i][j] = objects[j][i];
@@ -634,6 +675,7 @@ float** cuda_kmeans(float **objects,      /* in: [numObjs][numCoords] */
 
     /* pick first numClusters elements of objects[] as initial cluster centers*/
     malloc2D(dimClusters, numCoords, numClusters, float);
+    #pragma omp parallel for
     for (i = 0; i < numCoords; i++) {
         for (j = 0; j < numClusters; j++) {
             dimClusters[i][j] = dimObjects[i][j];
@@ -676,14 +718,23 @@ float** cuda_kmeans(float **objects,      /* in: [numObjs][numCoords] */
     checkCuda(cudaMemcpy(deviceMembership, membership,
               numObjs*sizeof(int), cudaMemcpyHostToDevice));
 
+    checkCuda(cudaMalloc(&deviceNewCluster, numClusters*numCoords*sizeof(float)));
+    checkCuda(cudaMalloc(&deviceNewClusterSize, numClusters * sizeof(int) ));
+    
+    checkCuda(cudaMemcpy(deviceNewCluster, newClusters[0], 
+        numClusters*numCoords*sizeof(float), cudaMemcpyHostToDevice));
+    checkCuda(cudaMemcpy(deviceNewClusterSize, newClusterSize,
+        numClusters * sizeof(int), cudaMemcpyHostToDevice));
+
+        //out of the loop!
+        checkCuda(cudaMemcpy(deviceClusters, dimClusters[0],
+                  numClusters*numCoords*sizeof(float), cudaMemcpyHostToDevice));
     do {
 #ifdef OUTPUT_TIME
     struct timeval tval_before, tval_after, tval_result;
     gettimeofday(&tval_before, NULL);
 #endif
 
-        checkCuda(cudaMemcpy(deviceClusters, dimClusters[0],
-                  numClusters*numCoords*sizeof(float), cudaMemcpyHostToDevice));
 #ifdef OUTPUT_SIZE
         printf("\nnumClusterBlocks = %d, numThreadPerCB  = %d\n",numClusterBlocks,numThreadsPerClusterBlock);
 #endif
@@ -738,8 +789,6 @@ float** cuda_kmeans(float **objects,      /* in: [numObjs][numCoords] */
                   sizeof(int), cudaMemcpyDeviceToHost));
         delta = (float)d;
 
-        checkCuda(cudaMemcpy(membership, deviceMembership,
-                  numObjs*sizeof(int), cudaMemcpyDeviceToHost));
 
 #ifdef OUTPUT_TIME        
     gettimeofday(&tval_after, NULL);
@@ -749,18 +798,29 @@ float** cuda_kmeans(float **objects,      /* in: [numObjs][numCoords] */
     gettimeofday(&tval_before, NULL);
 #endif
 
+        checkCuda(cudaMemcpy(membership, deviceMembership,
+                  numObjs*sizeof(int), cudaMemcpyDeviceToHost));
+
+    //checkCuda(cudaMemcpy(deviceMembership, membership,
+    //        numObjs*sizeof(int), cudaMemcpyHostToDevice));
+    /*
+    dim3 blockDim = BLOCKSIZE2;
+    dim3 gridDim = numClusterBlocks/blockDim.x + 1;
+    printf("Entering kernel!\n");
+    sum_object <<< gridDim, blockDim, BLOCKSIZE2 * sizeof(unsigned int) >>> 
+        (deviceMembership, deviceObjects, deviceNewClusterSize, deviceNewCluster ,numObjs, numCoords, numClusters);
+    cudaThreadSynchronize();
+    checkLastCudaError();
+    printf("Leaving kernel!\n");
+    */
         for (i=0; i<numObjs; i++) {
             /* find the array index of nestest cluster center */
             index = membership[i];
 
-            /* update new cluster centers : sum of objects located within */
             newClusterSize[index]++;
             for (j=0; j<numCoords; j++)
                 newClusters[j][index] += objects[i][j];
         }
-
-        //  TODO: Flip the nesting order
-        //  TODO: Change layout of newClusters to [numClusters][numCoords]
         /* average the sum and replace old cluster centers with newClusters */
         for (i=0; i<numClusters; i++) {
             for (j=0; j<numCoords; j++) {
@@ -770,6 +830,9 @@ float** cuda_kmeans(float **objects,      /* in: [numObjs][numCoords] */
             }
             newClusterSize[i] = 0;   /* set back to 0 */
         }
+        checkCuda(cudaMemcpy(deviceClusters, dimClusters[0],
+                  numClusters*numCoords*sizeof(float), cudaMemcpyHostToDevice));
+
 #ifdef OUTPUT_TIME        
     gettimeofday(&tval_after, NULL);
     timersub(&tval_after, &tval_before, &tval_result);
@@ -784,6 +847,7 @@ float** cuda_kmeans(float **objects,      /* in: [numObjs][numCoords] */
     /* allocate a 2D space for returning variable clusters[] (coordinates
        of cluster centers) */
     malloc2D(clusters, numClusters, numCoords, float);
+    #pragma omp parallel for
     for (i = 0; i < numClusters; i++) {
         for (j = 0; j < numCoords; j++) {
             clusters[i][j] = dimClusters[j][i];
@@ -805,4 +869,5 @@ float** cuda_kmeans(float **objects,      /* in: [numObjs][numCoords] */
 
     return clusters;
 }
+
 
