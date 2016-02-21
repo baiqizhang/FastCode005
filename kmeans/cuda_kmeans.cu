@@ -884,7 +884,13 @@ float** cuda_kmeans(float **objects,      /* in: [numObjs][numCoords] */
     /* allocate a 2D space for returning variable clusters[] (coordinates
        of cluster centers) */
     malloc2D(clusters, numClusters, numCoords, float);
-    #pragma omp parallel for
+    
+
+    checkCuda(cudaMemcpy(dimClusters[0], deviceClusters, 
+        numClusters*numCoords*sizeof(float), cudaMemcpyDeviceToHost));
+        
+
+
     for (i = 0; i < numClusters; i++) {
         for (j = 0; j < numCoords; j++) {
             clusters[i][j] = dimClusters[j][i];
