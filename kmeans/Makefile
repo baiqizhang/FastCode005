@@ -44,7 +44,7 @@ OPTFLAGS    = -O -NDEBUG
 OPTFLAGS    = -g -pg -O3  
 INCFLAGS    = -I.
 CFLAGS      = $(OPTFLAGS) $(DFLAGS) $(INCFLAGS)
-NVCCFLAGS   = $(CFLAGS) --ptxas-options=-v -arch=sm_20
+NVCCFLAGS   = $(CFLAGS) #--ptxas-options=-v -arch=sm_20
 LDFLAGS     = $(OPTFLAGS)
 LIBS        =
 
@@ -104,7 +104,7 @@ CUDA_CU_OBJ = $(CUDA_CU_SRC:%.cu=%.o)
 
 cuda: cuda_main
 cuda_main: $(CUDA_C_OBJ) $(CUDA_CU_OBJ)
-	$(NVCC) -Xcompiler " -openmp" $(LDFLAGS) -o $@ $(CUDA_C_OBJ) $(CUDA_CU_OBJ)
+	$(NVCC) $(LDFLAGS) -o $@ $(CUDA_C_OBJ) $(CUDA_CU_OBJ)
 
 #---------------------------------------------------------------------
 clean:

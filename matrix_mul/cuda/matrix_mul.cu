@@ -22,7 +22,7 @@
 #include "matrix_mul.h"
 #include "stdio.h"
 #include <sys/time.h>
-#define OUTPUT_TIME 
+//#define OUTPUT_TIME 
 //#define TILE_WIDTH 2
 
 namespace cuda
@@ -352,6 +352,43 @@ __device__ void saxpy( float a, float *b, float *c )
 }
 
 
+ __global__ void sgemmNN( const float *A, int lda, const float *B, int ldb, float* C, int ldc, int k, float alpha, float beta )
+{
+    const int inx = threadIdx.x;
+    const int iny = threadIdx.y;
+    const int ibx = blockIdx.x * 64;
+    const int iby = blockIdx.y * 16;
+    const int id = inx + iny*16;
+
+    A += ibx + id;
+    B += inx + ( iby + iny) * ldb ;
+    C += ibx + id  + ( iby * ldc );
+
+    const float *Blast = B + k;
+
+    float c[16] = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
+
+    __shared__ float bs[16][17];
+    do
+    {
+#pragma unroll
+        for( int i = 0; i < 16; i += 4 )
+            bs[inx][iny+i]  = B[i*ldb];
+        __syncthreads();
+
+#pragma unroll
+        for( int i = 0; i < 16; i++, A += lda )
+            saxpy( A[0], &bs[i][0], c ); 
+
+        B += 16;
+        __syncthreads();
+    } while( B < Blast );
+
+    for( int i = 0; i < 16; i++, C += ldc )
+        C[0] = alpha*c[i] + beta*C[0]; 
+}	
+
+
 
 
 
@@ -400,7 +437,9 @@ __device__ void saxpy( float a, float *b, float *c )
       //preProcess<<<dimGrid, dimBlock>>>(sq_matrix_1_d, sq_matrix_2_d, sq_matrix_result_d, sq_dimension);
       //matrixMultiply_1024<<<dimGrid, dimBlock>>>(sq_matrix_1_d, sq_matrix_2_d, sq_matrix_result_d, sq_dimension);
         dim3 grid( 1024/64, 1024/16 ), threads(16, 4);
-        matrixMultiply_1024_2<<<grid, threads>>>(sq_matrix_1_d, sq_matrix_2_d, sq_matrix_result_d, sq_dimension);
+//        printf("\nsgemm");
+        sgemmNN<<<grid, threads>>>( sq_matrix_2_d, sq_dimension, sq_matrix_1_d, sq_dimension, sq_matrix_result_d, sq_dimension, sq_dimension, 1, 1 );
+        //matrixMultiply_1024_2<<<grid, threads>>>(sq_matrix_1_d, sq_matrix_2_d, sq_matrix_result_d, sq_dimension);
     }else if (sq_dimension == 1000){
       matrixMultiply_1000_2<<<dimGrid, dimBlock>>>(sq_matrix_1_d, sq_matrix_2_d, sq_matrix_result_d, sq_dimension);
     }else{

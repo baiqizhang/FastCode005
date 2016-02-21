@@ -112,6 +112,8 @@ void find_nearest_cluster_2333(int numCoords,
                           int numClusters,
                           float *objects,           //  [numCoords][numObjs]
                           float *deviceClusters,    //  [numCoords][numClusters]
+                          float *deviceNewCluster,//  [numCoords][numClusters]
+                          int *deviceNewClusterSize, //[numClusters]
                           int *membership,          //  [numObjs]
                           int *intermediates)
 {
@@ -194,6 +196,10 @@ void find_nearest_cluster_2333(int numCoords,
             intermediates[blockIdx.x] = membershipChanged[0];
         }
 
+
+        atomicAdd(&deviceNewClusterSize[index],1);
+        for (int j=0; j<numCoords; j++)
+            atomicAdd(&deviceNewCluster[j*numClusters + index], objects[j*numObjs+objectId]);
     }
 }
 
@@ -587,39 +593,76 @@ void compute_delta3(int *deviceIntermediates,
 
 __global__ static
 void sum_object(int *deviceMembership,
-                float *deviceObjects,
-                int *deviceNewClusterSize,
-                float *deviceNewCluster,
+                float *deviceObjects,   // [numCoords][numObjs]
+                int *deviceNewClusterSize, //[numClusters]
+                float *deviceNewCluster,//  [numCoords][numClusters]
+                float *deviceCusters,   //  [numCoords][numClusters]
                 int numObjs,
                 int numCoords,
                 int numClusters   )
 {
-        // #pragma omp parallel for
-        // for (i=0; i<numObjs; i++) {
-        //     /* find the array index of nestest cluster center */
-        //     index = membership[i];
 
-        //      
-        //     newClusterSize[index]++;
-        //     #pragma omp parallel for
-        //     for (j=0; j<numCoords; j++)
-        //         newClusters[j][index] += objects[i][j];
-        // }
+/*
+        checkCuda(cudaMemcpy(membership, deviceMembership,
+                  numObjs*sizeof(int), cudaMemcpyDeviceToHost));
 
+        for (i=0; i<numObjs; i++) {
+            index = membership[i];
 
-    int limit = BLOCKSIZE2;
-    unsigned int tid = threadIdx.x;
-    unsigned int counter;
-
-    for(counter = tid; counter< numObjs; counter += limit){
-        int index = deviceMembership[counter];
-        deviceNewClusterSize[index]++;
-        int j;
-        for(j = 0; j < numCoords; j++){
-            //printf("%d %d \n%d %d %d %d %d\n", numObjs, numCoords, counter, j, index, j*numObjs + index, counter*numCoords + j);
-            deviceNewCluster[j*numClusters + index] += deviceObjects[counter*numCoords + j];
-            //deviceObjects[0] += deviceObjects[counter*numCoords + j];
+            newClusterSize[index]++;
+            for (j=0; j<numCoords; j++)
+                newClusters[j][index] += objects[i][j];
         }
+        
+        for (i=0; i<numClusters; i++) {
+            for (j=0; j<numCoords; j++) {
+                if (newClusterSize[i] > 0)
+                    dimClusters[j][i] = newClusters[j][i] / newClusterSize[i];
+                newClusters[j][i] = 0.0;
+            }
+            newClusterSize[i] = 0;  
+        }
+        checkCuda(cudaMemcpy(deviceClusters, dimClusters[0],
+                  numClusters*numCoords*sizeof(float), cudaMemcpyHostToDevice));
+*/
+
+//    __shared__ int newClusterSize[32];
+//    __shared__ int newCluster[32*8];
+    
+//    const int limit = threadIdx.x*1024 + 1024;
+    int i=threadIdx.x * 1024,j,index;
+
+//    if (threadIdx.x<32)
+//        newClusterSize[threadIdx.x]=0;
+//    if (threadIdx.x<32*8)
+//        newCluster[32*8]=0;
+//    __syncthreads();
+    
+/*
+#pragma unroll
+    while (i < limit) {
+        if (i>=numObjs)
+            break;
+        index = deviceMembership[i];
+        atomicAdd(&deviceNewClusterSize[index],1);
+        
+#pragma unroll
+        for (j=0; j<numCoords; j++)
+            atomicAdd(&deviceNewCluster[j*numClusters + index], deviceObjects[j*numObjs+i]);
+        i++;
+    }
+*/
+//    if (threadIdx.x!=0)
+//        return;
+//     __syncthreads();
+
+    for (i=0; i<numClusters; i++) {
+        for (j=0; j<numCoords; j++) {
+            if (deviceNewClusterSize[i] > 0)
+                deviceCusters[j*numClusters+i] =deviceNewCluster[j*numClusters + i] / deviceNewClusterSize[i];
+            deviceNewCluster[j*numClusters + i] = 0.0;
+        }
+        deviceNewClusterSize[i] = 0;  
     }
 }
 
@@ -721,10 +764,8 @@ float** cuda_kmeans(float **objects,      /* in: [numObjs][numCoords] */
     checkCuda(cudaMalloc(&deviceNewCluster, numClusters*numCoords*sizeof(float)));
     checkCuda(cudaMalloc(&deviceNewClusterSize, numClusters * sizeof(int) ));
     
-    checkCuda(cudaMemcpy(deviceNewCluster, newClusters[0], 
-        numClusters*numCoords*sizeof(float), cudaMemcpyHostToDevice));
-    checkCuda(cudaMemcpy(deviceNewClusterSize, newClusterSize,
-        numClusters * sizeof(int), cudaMemcpyHostToDevice));
+    checkCuda(cudaMemset(deviceNewCluster, 0, numClusters*numCoords*sizeof(float)));
+    checkCuda(cudaMemset(deviceNewClusterSize, 0, numClusters * sizeof(int)));
 
         //out of the loop!
         checkCuda(cudaMemcpy(deviceClusters, dimClusters[0],
@@ -742,7 +783,7 @@ float** cuda_kmeans(float **objects,      /* in: [numObjs][numCoords] */
             find_nearest_cluster_2333
             <<< numClusterBlocks, numThreadsPerClusterBlock, clusterBlockSharedDataSize >>>
             (numCoords, numObjs, numClusters,
-             deviceObjects, deviceClusters, deviceMembership, deviceIntermediates);
+             deviceObjects, deviceClusters, deviceNewCluster, deviceNewClusterSize, deviceMembership, deviceIntermediates);
         else
             find_nearest_cluster_2
             <<< numClusterBlocks, numThreadsPerClusterBlock, clusterBlockSharedDataSize >>>
@@ -753,7 +794,7 @@ float** cuda_kmeans(float **objects,      /* in: [numObjs][numCoords] */
 #ifdef OUTPUT_TIME
     gettimeofday(&tval_after, NULL);
     timersub(&tval_after, &tval_before, &tval_result);
-    printf(" %ld.%06ld\t", (long int)tval_result.tv_sec, (long int)tval_result.tv_usec);
+    printf("#%d %ld.%06ld\t",loop, (long int)tval_result.tv_sec, (long int)tval_result.tv_usec);
     
     gettimeofday(&tval_before, NULL);
 #endif
@@ -797,42 +838,38 @@ float** cuda_kmeans(float **objects,      /* in: [numObjs][numCoords] */
     
     gettimeofday(&tval_before, NULL);
 #endif
+        if (numCoords != 8){
+            checkCuda(cudaMemcpy(membership, deviceMembership,
+                      numObjs*sizeof(int), cudaMemcpyDeviceToHost));
+        
+            for (i=0; i<numObjs; i++) {
+                index = membership[i];
 
-        checkCuda(cudaMemcpy(membership, deviceMembership,
-                  numObjs*sizeof(int), cudaMemcpyDeviceToHost));
-
-    //checkCuda(cudaMemcpy(deviceMembership, membership,
-    //        numObjs*sizeof(int), cudaMemcpyHostToDevice));
-    /*
-    dim3 blockDim = BLOCKSIZE2;
-    dim3 gridDim = numClusterBlocks/blockDim.x + 1;
-    printf("Entering kernel!\n");
-    sum_object <<< gridDim, blockDim, BLOCKSIZE2 * sizeof(unsigned int) >>> 
-        (deviceMembership, deviceObjects, deviceNewClusterSize, deviceNewCluster ,numObjs, numCoords, numClusters);
-    cudaThreadSynchronize();
-    checkLastCudaError();
-    printf("Leaving kernel!\n");
-    */
-        for (i=0; i<numObjs; i++) {
-            /* find the array index of nestest cluster center */
-            index = membership[i];
-
-            newClusterSize[index]++;
-            for (j=0; j<numCoords; j++)
-                newClusters[j][index] += objects[i][j];
-        }
-        /* average the sum and replace old cluster centers with newClusters */
-        for (i=0; i<numClusters; i++) {
-            for (j=0; j<numCoords; j++) {
-                if (newClusterSize[i] > 0)
-                    dimClusters[j][i] = newClusters[j][i] / newClusterSize[i];
-                newClusters[j][i] = 0.0;   /* set back to 0 */
+                newClusterSize[index]++;
+                for (j=0; j<numCoords; j++){
+                    newClusters[j][index] += objects[i][j];
+                }
             }
-            newClusterSize[i] = 0;   /* set back to 0 */
-        }
-        checkCuda(cudaMemcpy(deviceClusters, dimClusters[0],
-                  numClusters*numCoords*sizeof(float), cudaMemcpyHostToDevice));
+        
+            for (i=0; i<numClusters; i++) {
+                for (j=0; j<numCoords; j++) {
+                    if (newClusterSize[i] > 0)
+                        dimClusters[j][i] = newClusters[j][i] / newClusterSize[i];
+                    newClusters[j][i] = 0.0;
+                }
+                newClusterSize[i] = 0;  
+            }
 
+            checkCuda(cudaMemcpy(deviceClusters, dimClusters[0],
+                      numClusters*numCoords*sizeof(float), cudaMemcpyHostToDevice));
+        } else {
+
+            dim3 gridDim = 1;//BLOCKSIZE2;
+            dim3 blockDim = 1;//numClusterBlocks/blockDim.x + 1;
+            sum_object <<< gridDim, blockDim>>>//, BLOCKSIZE2 * sizeof(unsigned int) >>> 
+                (deviceMembership, deviceObjects, deviceNewClusterSize, deviceNewCluster, deviceClusters ,numObjs, numCoords, numClusters);
+            cudaThreadSynchronize();
+        }
 #ifdef OUTPUT_TIME        
     gettimeofday(&tval_after, NULL);
     timersub(&tval_after, &tval_before, &tval_result);
