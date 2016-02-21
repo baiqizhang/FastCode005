@@ -626,6 +626,7 @@ float** cuda_kmeans(float **objects,      /* in: [numObjs][numCoords] */
     //  Copy objects given in [numObjs][numCoords] layout to new
     //  [numCoords][numObjs] layout
     malloc2D(dimObjects, numCoords, numObjs, float);
+    #pragma omp parallel for
     for (i = 0; i < numCoords; i++) {
         for (j = 0; j < numObjs; j++) {
             dimObjects[i][j] = objects[j][i];
@@ -634,6 +635,7 @@ float** cuda_kmeans(float **objects,      /* in: [numObjs][numCoords] */
 
     /* pick first numClusters elements of objects[] as initial cluster centers*/
     malloc2D(dimClusters, numCoords, numClusters, float);
+    #pragma omp parallel for
     for (i = 0; i < numCoords; i++) {
         for (j = 0; j < numClusters; j++) {
             dimClusters[i][j] = dimObjects[i][j];
@@ -748,7 +750,7 @@ float** cuda_kmeans(float **objects,      /* in: [numObjs][numCoords] */
     
     gettimeofday(&tval_before, NULL);
 #endif
-
+        #pragma omp parallel for
         for (i=0; i<numObjs; i++) {
             /* find the array index of nestest cluster center */
             index = membership[i];
@@ -762,6 +764,7 @@ float** cuda_kmeans(float **objects,      /* in: [numObjs][numCoords] */
         //  TODO: Flip the nesting order
         //  TODO: Change layout of newClusters to [numClusters][numCoords]
         /* average the sum and replace old cluster centers with newClusters */
+        #pragma omp parallel for
         for (i=0; i<numClusters; i++) {
             for (j=0; j<numCoords; j++) {
                 if (newClusterSize[i] > 0)
@@ -784,6 +787,7 @@ float** cuda_kmeans(float **objects,      /* in: [numObjs][numCoords] */
     /* allocate a 2D space for returning variable clusters[] (coordinates
        of cluster centers) */
     malloc2D(clusters, numClusters, numCoords, float);
+    #pragma omp parallel for
     for (i = 0; i < numClusters; i++) {
         for (j = 0; j < numCoords; j++) {
             clusters[i][j] = dimClusters[j][i];

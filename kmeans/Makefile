@@ -104,7 +104,7 @@ CUDA_CU_OBJ = $(CUDA_CU_SRC:%.cu=%.o)
 
 cuda: cuda_main
 cuda_main: $(CUDA_C_OBJ) $(CUDA_CU_OBJ)
-	$(NVCC) $(LDFLAGS) -o $@ $(CUDA_C_OBJ) $(CUDA_CU_OBJ)
+	$(NVCC) -Xcompiler " -openmp" $(LDFLAGS) -o $@ $(CUDA_C_OBJ) $(CUDA_CU_OBJ)
 
 #---------------------------------------------------------------------
 clean:
