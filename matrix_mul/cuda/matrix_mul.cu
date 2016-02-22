@@ -270,6 +270,33 @@ namespace cuda
       C[row*d + col] = sum;
   }
 
+  // tiled and unrolled
+  __global__ void matrixMultiply2(float *A, float *B, float *C, int d) {
+    __shared__ float A_tile[TILE_WIDTH][TILE_WIDTH];
+    __shared__ float B_tile[TILE_WIDTH][TILE_WIDTH];
+
+    int bx = blockIdx.x;
+    int by = blockIdx.y;
+    int tx = threadIdx.x;
+    int ty = threadIdx.y;
+
+    int row = by * TILE_WIDTH + ty;
+    int col = bx * TILE_WIDTH + tx;
+
+    float sum = 0;
+
+    for (int i = 0; i < d / TILE_WIDTH; ++i) {
+      A_tile[ty][tx] = A[row * d + (i * TILE_WIDTH + tx)];
+      B_tile[ty][tx] = B[col + (i * TILE_WIDTH + ty) * d];
+      __syncthreads();
+
+      for (int k = 0; k < TILE_WIDTH; ++k) {
+        sum += A_tile[ty][k] * B_tile[k][tx];
+      }
+      __syncthreads();      
+    }
+    C[row * d + col] = sum;
+  }
 
   void 
   matrix_multiplication(float *sq_matrix_1, float *sq_matrix_2, float *sq_matrix_result, unsigned int sq_dimension)
@@ -287,7 +314,7 @@ namespace cuda
     cudaMalloc((void**) &sq_matrix_2_d, size);
     cudaMemcpy(sq_matrix_2_d, sq_matrix_2, size, cudaMemcpyHostToDevice);
 
-    /*allocate sq_matrix_result on host */
+    /*allocate sq_matrix_result on device */
     cudaMalloc((void**) &sq_matrix_result_d, size);
       
     /***************************************************
@@ -298,7 +325,8 @@ namespace cuda
     if (sq_dimension==1024){
       matrixMultiply_1024<<<dimGrid, dimBlock>>>(sq_matrix_1_d, sq_matrix_2_d, sq_matrix_result_d, sq_dimension);
     }else if (sq_dimension == 1000){
-      matrixMultiply_1000_2<<<dimGrid, dimBlock>>>(sq_matrix_1_d, sq_matrix_2_d, sq_matrix_result_d, sq_dimension);
+      // matrixMultiply_1000_2<<<dimGrid, dimBlock>>>(sq_matrix_1_d, sq_matrix_2_d, sq_matrix_result_d, sq_dimension);
+      matrixMultiply2<<<dimGrid, dimBlock>>>(sq_matrix_1_d, sq_matrix_2_d, sq_matrix_result_d, sq_dimension);
     }else{
       matrixMultiply<<<dimGrid, dimBlock>>>(sq_matrix_1_d, sq_matrix_2_d, sq_matrix_result_d, sq_dimension);
     }
