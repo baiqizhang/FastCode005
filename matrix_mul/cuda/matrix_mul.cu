@@ -156,49 +156,6 @@ namespace cuda
       C[row*d + col] = sum;
   }
 
-  __global__ void matrixMultiply_1024_32thread(float * A, float * B, float * C, int d){
-    __shared__ float A_tile[2][TILE_WIDTH][TILE_WIDTH];
-    __shared__ float B_tile[2][TILE_WIDTH][TILE_WIDTH];
-    
-    int row = (blockIdx.y<<TILE_WIDTH_SHIFT) + threadIdx.y, col = (blockIdx.x<<TILE_WIDTH_SHIFT) + threadIdx.x;
-    float sum = 0;
-
-    #pragma unroll
-    for (int m = 0; m < TILE_WIDTH; m+=2) {
-      if (m!=0){
-        #pragma unroll
-        for (int k = 0; k < TILE_WIDTH; ++k){
-          sum += A_tile[1][k][threadIdx.y] * B_tile[1][k][threadIdx.x];
-          //sum += A_tile[1][threadIdx.y][k] * B_tile[1][k][threadIdx.x];
-        }
-      }
-      
-      A_tile[0][threadIdx.x][threadIdx.y] = A[row*d + (m<<TILE_WIDTH_SHIFT)+threadIdx.x];
-      B_tile[0][threadIdx.y][threadIdx.x] = //B[col*d + (m<<TILE_WIDTH_SHIFT)+threadIdx.y];
-                                            B[((m<<TILE_WIDTH_SHIFT)+threadIdx.y)*d+col];
-
-      __syncthreads();
-
-      #pragma unroll
-      for (int k = 0; k < TILE_WIDTH; ++k){
-        sum += A_tile[0][k][threadIdx.y] * B_tile[0][k][threadIdx.x];
-        //sum += A_tile[1][threadIdx.y][k] * B_tile[1][k][threadIdx.x];
-      }
-      A_tile[1][threadIdx.x][threadIdx.y] = A[row*d + ((m+1)<<TILE_WIDTH_SHIFT)+threadIdx.x];
-      B_tile[1][threadIdx.y][threadIdx.x] = //B[col*d + ((m+1)<<TILE_WIDTH_SHIFT)+threadIdx.y];
-                                            B[(((m+1)<<TILE_WIDTH_SHIFT)+threadIdx.y)*d+col];
-      __syncthreads();
-    }
-    
-    #pragma unroll
-    for (int k = 0; k < TILE_WIDTH; ++k){
-        sum += A_tile[1][k][threadIdx.y] * B_tile[1][k][threadIdx.x];
-    }
-
-    C[row*d + col] = sum;
-  }
-  
-
   __global__ void matrixMultiply_1024(float * A, float * B, float * C, int d){
     __shared__ float A_tile[2][TILE_WIDTH][TILE_WIDTH];
     //__shared__ float test[1];
@@ -294,7 +251,7 @@ namespace cuda
 
 
 
-#define STEP 16
+#define STEP 32
 #define GROUP 4
 //thread : (STEP,GROUP)
 
@@ -302,7 +259,6 @@ namespace cuda
 __device__ void saxpy( float a, float *b, float *c )
 {
     c[0] += a*b[0];
-
     c[1] += a*b[1];
     c[2] += a*b[2];
     c[3] += a*b[3];
@@ -318,9 +274,25 @@ __device__ void saxpy( float a, float *b, float *c )
     c[13] += a*b[13];
     c[14] += a*b[14];
     c[15] += a*b[15];
+    c[16] += a*b[16];
+    c[17] += a*b[17];
+    c[18] += a*b[18];
+    c[19] += a*b[19];
+    c[20] += a*b[20];
+    c[21] += a*b[21];
+    c[22] += a*b[22];
+    c[23] += a*b[23];
+    c[24] += a*b[24];
+    c[25] += a*b[25];
+    c[26] += a*b[26];
+    c[27] += a*b[27];
+    c[28] += a*b[28];
+    c[29] += a*b[29];
+    c[30] += a*b[30];
+    c[31] += a*b[31];
 }
 
- __global__ void sgemmNN( const float *A, int lda, const float *B, int ldb, float* C, int ldc, int k, float alpha, float beta )
+ __global__ void matrixMultiply_1024_2( const float *A, const float *B, float* C, int dim )
 {
     const int inx = threadIdx.x;
     const int iny = threadIdx.y;
@@ -329,61 +301,44 @@ __device__ void saxpy( float a, float *b, float *c )
     const int id = inx + iny * STEP;
 
     A += ibx + id;
-    B += inx + ( iby + iny) * ldb ;
-    C += ibx + id  + ( iby * ldc );
+    B += inx + ( iby + iny) * dim ;
+    C += ibx + id  + ( iby * dim );
     
 //    if (blockIdx.x!=2||blockIdx.y!=3)
 //        return;
 //    printf("(%d,%d:%d,%d):A+=%d B+=%d C+=%d \n", blockIdx.x , blockIdx.y, inx,iny,
 //             ibx + id, inx + ( iby + iny) * ldb ,ibx + id  + ( iby * ldc ));
     
-    const float *Blast = B + k;
+    //const float *Blast = B + dim;
 
     float c[STEP] = {0};
 
     __shared__ float bs[STEP][STEP + 1];
-    do
+    //do
+#pragma unroll
+    for (int t=0;t<1024/STEP;t++)
     {
 #pragma unroll
         for( int i = 0; i < STEP; i += GROUP )
-            bs[inx][iny+i]  = B[i*ldb];
+            bs[inx][iny+i]  = B[i*dim];
+
+
         __syncthreads();
 
 #pragma unroll
-        for( int i = 0; i < STEP; i++, A += lda ){
+        for( int i = 0; i < STEP; i++, A += dim ){
             saxpy( A[0], &bs[i][0], c ); 
             //printf("\n%f*%f\n",A[0],bs[i][0]);
         }
         B += STEP;
-        __syncthreads();
-    } while( B < Blast );
 
-    for( int i = 0; i < STEP; i++, C += ldc )
+        
+        __syncthreads();
+    } //while( B < Blast );
+
+    for( int i = 0; i < STEP; i++, C += dim )
         C[0] = c[i]; 
 }	
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
   void 
@@ -431,13 +386,10 @@ __device__ void saxpy( float a, float *b, float *c )
            for(int j=0;j<4;j++)
                printf("%f ",sq_matrix_2[i*4+j]);
            printf("\n");
-        }
-*/
-      //matrixMultiply_1024<<<dimGrid, dimBlock>>>(sq_matrix_1_d, sq_matrix_2_d, sq_matrix_result_d, sq_dimension);
+        }*/
         dim3 grid( sq_dimension/STEP/GROUP, sq_dimension/STEP ), 
              threads(STEP, GROUP);
-        sgemmNN<<<grid, threads>>>( sq_matrix_2_d, sq_dimension, sq_matrix_1_d, sq_dimension, sq_matrix_result_d, sq_dimension, sq_dimension, 1, 1 );
-        //matrixMultiply_1024_2<<<grid, threads>>>(sq_matrix_1_d, sq_matrix_2_d, sq_matrix_result_d, sq_dimension);
+        matrixMultiply_1024_2<<<grid, threads>>>( sq_matrix_2_d, sq_matrix_1_d, sq_matrix_result_d, sq_dimension);
     }else if (sq_dimension == 1000){
       matrixMultiply_1000_2<<<dimGrid, dimBlock>>>(sq_matrix_1_d, sq_matrix_2_d, sq_matrix_result_d, sq_dimension);
     }else{
@@ -474,5 +426,6 @@ __device__ void saxpy( float a, float *b, float *c )
     }*/
   }
 } // namespace cuda
+
 
 
