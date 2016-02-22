@@ -77,7 +77,7 @@ namespace cuda
         sum += A_tile[0][threadIdx.y][k] * B_tile[0][k][threadIdx.x];
         sum += A_tile[1][threadIdx.y][k] * B_tile[1][k][threadIdx.x];
       }
-      // __syncthreads();
+      __syncthreads();
     }
     if (row < d && col < d)
       C[row*d + col] = sum;
