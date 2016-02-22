@@ -43,7 +43,8 @@
 #define BLOCKSIZE2 1024
 //#define OUTPUT_SIZE
 //#define OUTPUT_TIME 
-#define NUMBER 9
+#define NUMBER 8
+//#define OUTPUT_RESULT
 
 
 #include <stdio.h>
@@ -821,7 +822,7 @@ float** cuda_kmeans(float **objects,      /* in: [numObjs][numCoords] */
                       numClusters*numCoords*sizeof(float), cudaMemcpyHostToDevice));
         } else {
 
-        
+  /*      
             checkCuda(cudaMemcpy(membership, deviceMembership,
                numObjs*sizeof(int), cudaMemcpyDeviceToHost));
         
@@ -834,18 +835,21 @@ float** cuda_kmeans(float **objects,      /* in: [numObjs][numCoords] */
                 }
             }
     
+*/
 
-/*
             cudaThreadSynchronize(); checkLastCudaError();            
             checkCuda(cudaMemcpy(newClusters[0], deviceNewCluster,
                         numClusters*numCoords*sizeof(float), cudaMemcpyDeviceToHost));
             checkCuda(cudaMemcpy(newClusterSize,deviceNewClusterSize,
                         numClusters * sizeof(int), cudaMemcpyDeviceToHost ));
-        */
-
-//            printf("\n");
+        
+#ifdef OUTPUT_RESULT
+            printf("Membership:\n");
+#endif
             for (i=0; i<numClusters; i++) {
-//                printf("%d ",newClusterSize[i]);
+#ifdef OUTPUT_RESULT
+                printf("%d ",newClusterSize[i]);
+#endif
                 for (j=0; j<numCoords; j++) {
                     if (newClusterSize[i] > 0)
                         dimClusters[j][i] = newClusters[j][i] / newClusterSize[i];
@@ -853,29 +857,21 @@ float** cuda_kmeans(float **objects,      /* in: [numObjs][numCoords] */
                 }
                 newClusterSize[i] = 0;  
             }
-/*
+
+#ifdef OUTPUT_RESULT
             printf("\nClusters:\n");
             for (i=0;i<numClusters;i++){
                 for (j=0;j<numCoords;j++)
                     printf("%f ",dimClusters[j][i]);
                 printf("\n");
             }
-*/
+#endif
             checkCuda(cudaMemcpy(deviceClusters, dimClusters[0],
                       numClusters*numCoords*sizeof(float), cudaMemcpyHostToDevice));
 
 
             checkCuda(cudaMemset(deviceNewCluster, 0, numClusters*numCoords*sizeof(float)));
             checkCuda(cudaMemset(deviceNewClusterSize, 0, numClusters * sizeof(int)));
-            
-
-/*
-            dim3 gridDim = 1;//BLOCKSIZE2;
-            dim3 blockDim = 1;//numClusterBlocks/blockDim.x + 1;
-            sum_object <<< gridDim, blockDim>>>//, BLOCKSIZE2 * sizeof(unsigned int) >>> 
-                (deviceMembership, deviceObjects, deviceNewClusterSize, deviceNewCluster, 
-                 deviceClusters ,numObjs, numCoords, numClusters);
-*/            
         }
 #ifdef OUTPUT_TIME        
     gettimeofday(&tval_after, NULL);
@@ -884,10 +880,50 @@ float** cuda_kmeans(float **objects,      /* in: [numObjs][numCoords] */
 #endif
         //printf("\ndelta:%f",delta);
         delta /= numObjs;
-//        if (numCoords==NUMBER){
-//            delta*=100;
-//        }
     } while (delta > threshold && loop++ < 500);
+
+//======================================================
+            checkCuda(cudaMemcpy(membership, deviceMembership,
+               numObjs*sizeof(int), cudaMemcpyDeviceToHost));
+        
+            for (i=0; i<numObjs; i++) {
+                index = membership[i];
+
+                newClusterSize[index]++;
+                for (j=0; j<numCoords; j++){
+                    newClusters[j][index] += objects[i][j];
+                }
+            }
+        
+#ifdef OUTPUT_RESULT
+            printf("Membership:\n");
+#endif
+            for (i=0; i<numClusters; i++) {
+#ifdef OUTPUT_RESULT
+                printf("%d ",newClusterSize[i]);
+#endif
+                for (j=0; j<numCoords; j++) {
+                    if (newClusterSize[i] > 0)
+                        dimClusters[j][i] = newClusters[j][i] / newClusterSize[i];
+                    newClusters[j][i] = 0.0;
+                }
+                newClusterSize[i] = 0;  
+            }
+
+#ifdef OUTPUT_RESULT
+            printf("\nClusters:\n");
+            for (i=0;i<numClusters;i++){
+                for (j=0;j<numCoords;j++)
+                    printf("%f ",dimClusters[j][i]);
+                printf("\n");
+            }
+#endif
+            checkCuda(cudaMemcpy(deviceClusters, dimClusters[0],
+                      numClusters*numCoords*sizeof(float), cudaMemcpyHostToDevice));
+
+
+//=====================================================
+
 
     *loop_iterations = loop + 1;
 
@@ -900,7 +936,6 @@ float** cuda_kmeans(float **objects,      /* in: [numObjs][numCoords] */
     checkCuda(cudaMemcpy(dimClusters[0], deviceClusters, 
         numClusters*numCoords*sizeof(float), cudaMemcpyDeviceToHost));
     
-
     for (i = 0; i < numClusters; i++) {
         for (j = 0; j < numCoords; j++) {
             clusters[i][j] = dimClusters[j][i];
