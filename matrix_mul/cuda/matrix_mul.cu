@@ -21,6 +21,8 @@
 #include <cuda_runtime.h>
 #include "matrix_mul.h"
 #include "stdio.h"
+#include <sys/time.h>
+//#define OUTPUT_TIME 
 //#define TILE_WIDTH 2
 
 namespace cuda
@@ -154,12 +156,55 @@ namespace cuda
       C[row*d + col] = sum;
   }
 
-  __global__ void matrixMultiply_1024(float * A, float * B, float * C, int d){
+  __global__ void matrixMultiply_1024_32thread(float * A, float * B, float * C, int d){
     __shared__ float A_tile[2][TILE_WIDTH][TILE_WIDTH];
     __shared__ float B_tile[2][TILE_WIDTH][TILE_WIDTH];
+    
     int row = (blockIdx.y<<TILE_WIDTH_SHIFT) + threadIdx.y, col = (blockIdx.x<<TILE_WIDTH_SHIFT) + threadIdx.x;
     float sum = 0;
+
+    #pragma unroll
+    for (int m = 0; m < TILE_WIDTH; m+=2) {
+      if (m!=0){
+        #pragma unroll
+        for (int k = 0; k < TILE_WIDTH; ++k){
+          sum += A_tile[1][k][threadIdx.y] * B_tile[1][k][threadIdx.x];
+          //sum += A_tile[1][threadIdx.y][k] * B_tile[1][k][threadIdx.x];
+        }
+      }
+      
+      A_tile[0][threadIdx.x][threadIdx.y] = A[row*d + (m<<TILE_WIDTH_SHIFT)+threadIdx.x];
+      B_tile[0][threadIdx.y][threadIdx.x] = //B[col*d + (m<<TILE_WIDTH_SHIFT)+threadIdx.y];
+                                            B[((m<<TILE_WIDTH_SHIFT)+threadIdx.y)*d+col];
+
+      __syncthreads();
+
+      #pragma unroll
+      for (int k = 0; k < TILE_WIDTH; ++k){
+        sum += A_tile[0][k][threadIdx.y] * B_tile[0][k][threadIdx.x];
+        //sum += A_tile[1][threadIdx.y][k] * B_tile[1][k][threadIdx.x];
+      }
+      A_tile[1][threadIdx.x][threadIdx.y] = A[row*d + ((m+1)<<TILE_WIDTH_SHIFT)+threadIdx.x];
+      B_tile[1][threadIdx.y][threadIdx.x] = //B[col*d + ((m+1)<<TILE_WIDTH_SHIFT)+threadIdx.y];
+                                            B[(((m+1)<<TILE_WIDTH_SHIFT)+threadIdx.y)*d+col];
+      __syncthreads();
+    }
     
+    #pragma unroll
+    for (int k = 0; k < TILE_WIDTH; ++k){
+        sum += A_tile[1][k][threadIdx.y] * B_tile[1][k][threadIdx.x];
+    }
+
+    C[row*d + col] = sum;
+  }
+  
+
+  __global__ void matrixMultiply_1024(float * A, float * B, float * C, int d){
+    __shared__ float A_tile[2][TILE_WIDTH][TILE_WIDTH];
+    //__shared__ float test[1];
+    __shared__ float B_tile[2][TILE_WIDTH][TILE_WIDTH];
+    int row = (blockIdx.y<<TILE_WIDTH_SHIFT) + threadIdx.y, col = (blockIdx.x<<TILE_WIDTH_SHIFT) + threadIdx.x;
+    float sum = 0; 
     #pragma unroll
     for (int m = 0; m < 32; m+=2) {
       if (m!=0){
@@ -169,20 +214,21 @@ namespace cuda
           //sum += A_tile[1][threadIdx.y][k] * B_tile[1][k][threadIdx.x];
         }
       }
-
+      
       A_tile[0][threadIdx.y][threadIdx.x] = A[row*d + (m<<TILE_WIDTH_SHIFT)+threadIdx.x];
-      B_tile[0][threadIdx.y][threadIdx.x] = B[((m<<TILE_WIDTH_SHIFT)+threadIdx.y)*d+col];
-
+      B_tile[0][threadIdx.y][threadIdx.x] = //B[col*d + (m<<TILE_WIDTH_SHIFT)+threadIdx.y];
+                                            B[((m<<TILE_WIDTH_SHIFT)+threadIdx.y)*d+col];
 
       __syncthreads();
+
       #pragma unroll
       for (int k = 0; k < TILE_WIDTH; ++k){
         sum += A_tile[0][threadIdx.y][k] * B_tile[0][k][threadIdx.x];
         //sum += A_tile[1][threadIdx.y][k] * B_tile[1][k][threadIdx.x];
       }
-
       A_tile[1][threadIdx.y][threadIdx.x] = A[row*d + ((m+1)<<TILE_WIDTH_SHIFT)+threadIdx.x];
-      B_tile[1][threadIdx.y][threadIdx.x] = B[(((m+1)<<TILE_WIDTH_SHIFT)+threadIdx.y)*d+col];
+      B_tile[1][threadIdx.y][threadIdx.x] = //B[col*d + ((m+1)<<TILE_WIDTH_SHIFT)+threadIdx.y];
+                                            B[(((m+1)<<TILE_WIDTH_SHIFT)+threadIdx.y)*d+col];
       __syncthreads();
     }
     
@@ -191,55 +237,9 @@ namespace cuda
         sum += A_tile[1][threadIdx.y][k] * B_tile[1][k][threadIdx.x];
     }
 
-    if (row < d && col < d)
-      C[row*d + col] = sum;
+    C[row*d + col] = sum;
   }
   
-  __global__ void matrixMultiply_1024_2(float * A, float * B, float * C, int d){
-    __shared__ float A_tile[4][TILE_WIDTH][TILE_WIDTH];
-    __shared__ float B_tile[4][TILE_WIDTH][TILE_WIDTH];
-    int row = (blockIdx.y<<TILE_WIDTH_SHIFT) + threadIdx.y, col = (blockIdx.x<<TILE_WIDTH_SHIFT) + threadIdx.x;
-    float sum = 0,sum2=0;
-    
-    #pragma unroll
-    for (int m = 0; m < 32; m+=4) {
-      if (m!=0){
-        #pragma unroll
-        for (int k = 0; k < TILE_WIDTH; ++k){
-          sum += A_tile[2][threadIdx.y][k] * B_tile[2][k][threadIdx.x];
-          sum2 += A_tile[3][threadIdx.y][k] * B_tile[3][k][threadIdx.x];
-        }
-      }
-
-      A_tile[0][threadIdx.y][threadIdx.x] = A[row*d + (m<<TILE_WIDTH_SHIFT)+threadIdx.x];
-      B_tile[0][threadIdx.y][threadIdx.x] = B[((m<<TILE_WIDTH_SHIFT)+threadIdx.y)*d+col];
-      A_tile[1][threadIdx.y][threadIdx.x] = A[row*d + ((m+1)<<TILE_WIDTH_SHIFT)+threadIdx.x];
-      B_tile[1][threadIdx.y][threadIdx.x] = B[(((m+1)<<TILE_WIDTH_SHIFT)+threadIdx.y)*d+col];
-
-
-      __syncthreads();
-      #pragma unroll
-      for (int k = 0; k < TILE_WIDTH; ++k){
-        sum += A_tile[0][threadIdx.y][k] * B_tile[0][k][threadIdx.x];
-        sum2 += A_tile[1][threadIdx.y][k] * B_tile[1][k][threadIdx.x];
-      }
-
-      A_tile[2][threadIdx.y][threadIdx.x] = A[row*d + ((m+2)<<TILE_WIDTH_SHIFT)+threadIdx.x];
-      B_tile[2][threadIdx.y][threadIdx.x] = B[(((m+2)<<TILE_WIDTH_SHIFT)+threadIdx.y)*d+col];
-      A_tile[3][threadIdx.y][threadIdx.x] = A[row*d + ((m+3)<<TILE_WIDTH_SHIFT)+threadIdx.x];
-      B_tile[3][threadIdx.y][threadIdx.x] = B[(((m+3)<<TILE_WIDTH_SHIFT)+threadIdx.y)*d+col];
-      __syncthreads();
-    }
-    
-    #pragma unroll
-    for (int k = 0; k < TILE_WIDTH; ++k){
-          sum += A_tile[2][threadIdx.y][k] * B_tile[2][k][threadIdx.x];
-          sum2 += A_tile[3][threadIdx.y][k] * B_tile[3][k][threadIdx.x];
-    }
-
-    if (row < d && col < d)
-      C[row*d + col] = sum+sum2;
-  }
 
   // Compute C = A * B
   __global__ void matrixMultiply(float * A, float * B, float * C, int d){
@@ -298,6 +298,121 @@ namespace cuda
     C[row * d + col] = sum;
   }
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#define STEP 16
+#define GROUP 4
+//thread : (STEP,GROUP)
+
+
+__device__ void saxpy( float a, float *b, float *c )
+{
+    c[0] += a*b[0];
+
+    c[1] += a*b[1];
+    c[2] += a*b[2];
+    c[3] += a*b[3];
+    c[4] += a*b[4];
+    c[5] += a*b[5];
+    c[6] += a*b[6];
+    c[7] += a*b[7];
+    c[8] += a*b[8];
+    c[9] += a*b[9];
+    c[10] += a*b[10];
+    c[11] += a*b[11];
+    c[12] += a*b[12];
+    c[13] += a*b[13];
+    c[14] += a*b[14];
+    c[15] += a*b[15];
+}
+
+ __global__ void sgemmNN( const float *A, int lda, const float *B, int ldb, float* C, int ldc, int k, float alpha, float beta )
+{
+    const int inx = threadIdx.x;
+    const int iny = threadIdx.y;
+    const int ibx = blockIdx.x * STEP * GROUP;
+    const int iby = blockIdx.y * STEP;
+    const int id = inx + iny * STEP;
+
+    A += ibx + id;
+    B += inx + ( iby + iny) * ldb ;
+    C += ibx + id  + ( iby * ldc );
+    
+//    if (blockIdx.x!=2||blockIdx.y!=3)
+//        return;
+//    printf("(%d,%d:%d,%d):A+=%d B+=%d C+=%d \n", blockIdx.x , blockIdx.y, inx,iny,
+//             ibx + id, inx + ( iby + iny) * ldb ,ibx + id  + ( iby * ldc ));
+    
+    const float *Blast = B + k;
+
+    float c[STEP] = {0};
+
+    __shared__ float bs[STEP][STEP + 1];
+    do
+    {
+#pragma unroll
+        for( int i = 0; i < STEP; i += GROUP )
+            bs[inx][iny+i]  = B[i*ldb];
+        __syncthreads();
+
+#pragma unroll
+        for( int i = 0; i < STEP; i++, A += lda ){
+            saxpy( A[0], &bs[i][0], c ); 
+            //printf("\n%f*%f\n",A[0],bs[i][0]);
+        }
+        B += STEP;
+        __syncthreads();
+    } while( B < Blast );
+
+    for( int i = 0; i < STEP; i++, C += ldc )
+        C[0] = c[i]; 
+}	
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
   void 
   matrix_multiplication(float *sq_matrix_1, float *sq_matrix_2, float *sq_matrix_result, unsigned int sq_dimension)
   {
@@ -322,8 +437,34 @@ namespace cuda
     ****************************************************/
     dim3 dimGrid((sq_dimension-1)/TILE_WIDTH+1, (sq_dimension-1)/TILE_WIDTH+1, 1);
     dim3 dimBlock(TILE_WIDTH, TILE_WIDTH, 1);
+
+#ifdef OUTPUT_TIME
+    struct timeval tval_before, tval_after, tval_result;
+    gettimeofday(&tval_before, NULL);
+#endif
+
+    //printf("\n\ndim=%d",sq_dimension);
     if (sq_dimension==1024){
-      matrixMultiply_1024<<<dimGrid, dimBlock>>>(sq_matrix_1_d, sq_matrix_2_d, sq_matrix_result_d, sq_dimension);
+        /*
+        printf("\nA = \n");
+        for (int i=0;i<4;i++){
+           for(int j=0;j<4;j++)
+               printf("%f ",sq_matrix_1[i*4+j]);
+           printf("\n");
+        }
+
+        printf("\nB = \n");
+        for (int i=0;i<4;i++){
+           for(int j=0;j<4;j++)
+               printf("%f ",sq_matrix_2[i*4+j]);
+           printf("\n");
+        }
+*/
+      //matrixMultiply_1024<<<dimGrid, dimBlock>>>(sq_matrix_1_d, sq_matrix_2_d, sq_matrix_result_d, sq_dimension);
+        dim3 grid( sq_dimension/STEP/GROUP, sq_dimension/STEP ), 
+             threads(STEP, GROUP);
+        sgemmNN<<<grid, threads>>>( sq_matrix_2_d, sq_dimension, sq_matrix_1_d, sq_dimension, sq_matrix_result_d, sq_dimension, sq_dimension, 1, 1 );
+        //matrixMultiply_1024_2<<<grid, threads>>>(sq_matrix_1_d, sq_matrix_2_d, sq_matrix_result_d, sq_dimension);
     }else if (sq_dimension == 1000){
       // matrixMultiply_1000_2<<<dimGrid, dimBlock>>>(sq_matrix_1_d, sq_matrix_2_d, sq_matrix_result_d, sq_dimension);
       matrixMultiply_1000_2<<<dimGrid, dimBlock>>>(sq_matrix_1_d, sq_matrix_2_d, sq_matrix_result_d, sq_dimension);
@@ -332,6 +473,12 @@ namespace cuda
     }
     cudaThreadSynchronize();
 
+#ifdef OUTPUT_TIME
+    gettimeofday(&tval_after, NULL);
+    timersub(&tval_after, &tval_before, &tval_result);
+    printf(" %ld.%06ld\t", (long int)tval_result.tv_sec, (long int)tval_result.tv_usec);
+#endif
+
     /***************************************************
     3rd Part: Transfer result from device to host
     ****************************************************/
@@ -339,6 +486,20 @@ namespace cuda
     cudaFree(sq_matrix_1_d);
     cudaFree(sq_matrix_2_d);
     cudaFree(sq_matrix_result_d);
+       /* 
+    if (sq_dimension==4){
+        printf("\nC = \n");
+        for (int i=0;i<4;i++){
+            for(int j=0;j<4;j++){
+                printf("%f:",sq_matrix_result[i*4+j]);
+                float sum = 0;
+                for (int k=0;k<4;k++)
+                    sum+=sq_matrix_1[i*4+k]*sq_matrix_2[k*4+j];
+                printf("%f ",sum);
+            }
+            printf("\n");
+        }
+    }*/
   }
 } // namespace cuda
 
