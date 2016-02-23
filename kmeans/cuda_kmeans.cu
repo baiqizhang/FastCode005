@@ -52,7 +52,6 @@
 #include <stdlib.h>
 #include <sys/time.h>
 #include "kmeans.h"
-/*
 static inline int nextPowerOfTwo(int n) {
     n--;
 
@@ -64,84 +63,45 @@ static inline int nextPowerOfTwo(int n) {
 //  n = n >> 32 | n;    //  For 64-bit ints
 
     return ++n;
-}*/
-
-
-/*----< find_nearest_cluster() >---------------------------------------------*/
-__global__ static
-void find_nearest_cluster_2(int numCoords,
-                          int numObjs,
-                          int numClusters,
-                          float *objects,           //  [numCoords][numObjs]
-                          float *deviceClusters,    //  [numCoords][numClusters]
-                          float *deviceNewCluster,//  [numCoords][numClusters]
-                          int *deviceNewClusterSize, //[numClusters]
-                          int *membership,          //  [numObjs]
-                          int *intermediates)
-{
-    extern __shared__ char sharedMemory[];
-
-    unsigned int tid = threadIdx.x;
-
-    //  The type chosen for membershipChanged must be large enough to support
-    //  reductions! There are blockDim.x elements, one for each thread in the
-    //  block.
-//    unsigned char *membershipChanged = (unsigned char *)sharedMemory;
-    float *clusters = (float *)(sharedMemory );//+ blockDim.x);
-   
-//    membershipChanged[tid] = 0;
-
-    //  BEWARE: We can overrun our shared memory here if there are too many
-    //  clusters or too many coordinates!
-
-    // using CUDA unroll
-    #pragma unroll 
-    for (int i = tid; i < numClusters; i += blockDim.x) {
-        for (int j = 0; j < numCoords; j++) {
-            clusters[(numClusters+1) * j + i] = deviceClusters[numClusters * j + i];
-        }
-    }
-    __syncthreads();
-
-    int objectId = blockDim.x * blockIdx.x + tid;
-
-    if (objectId < numObjs) {
-        int   index;
-        float dist, min_dist=1e20;
-
-        /* find the cluster id that has min distance to object */
-        index = 0;
-        
-        for (int i=0;i<numClusters;i++){
-            dist = 0;
-#pragma unroll
-            for (int j = 0; j < numCoords; j++)
-            {
-                float x = objects[numObjs * j + objectId];
-                float y = clusters[(numClusters+1) * j + i];
-                dist += (x-y)*(x-y);
-            }
-            if (dist<min_dist){
-                min_dist = dist;
-                index = i;
-            }
-        }
-                
-//        if (numCoords==NUMBER){
-#pragma unroll
-            for (int j=0; j<numCoords; j++)
-                atomicAdd(&deviceNewCluster[j*numClusters + index], objects[j*numObjs+objectId]);
-//        }
-        
-        // assign the membership to object objectId 
-        if (membership[objectId] != index) 
-            atomicAdd(&intermediates[0],1);
-        membership[objectId] = index;
-
-        atomicAdd(&deviceNewClusterSize[index],1);
-    }
 }
+/*----< euclid_dist_2() >----------------------------------------------------*/
+/* square of Euclid distance between two multi-dimensional points            */
+__host__ __device__ inline static
+float euclid_dist_2(int    numCoords,
+                    int    numObjs,
+                    int    numClusters,
+                    float *objects,     // [numCoords][numObjs]
+                    float *clusters,    // [numCoords][numClusters]
+                    int    objectId,
+                    int    clusterId)
+{
+    int i;
+    float ans=0.0;
 
+
+    // 6-way unrolling
+    for (i = 0; i < numCoords - 5; i += 6) {
+        ans += (objects[numObjs * i + objectId] - clusters[numClusters * i + clusterId]) *
+               (objects[numObjs * i + objectId] - clusters[numClusters * i + clusterId]);
+        ans += (objects[numObjs * (i+1) + objectId] - clusters[numClusters * (i+1) + clusterId]) *
+               (objects[numObjs * (i+1) + objectId] - clusters[numClusters * (i+1) + clusterId]);
+        ans += (objects[numObjs * (i+2) + objectId] - clusters[numClusters * (i+2) + clusterId]) *
+               (objects[numObjs * (i+2) + objectId] - clusters[numClusters * (i+2) + clusterId]);
+        ans += (objects[numObjs * (i+3) + objectId] - clusters[numClusters * (i+3) + clusterId]) *
+               (objects[numObjs * (i+3) + objectId] - clusters[numClusters * (i+3) + clusterId]);
+        ans += (objects[numObjs * (i+4) + objectId] - clusters[numClusters * (i+4) + clusterId]) *
+               (objects[numObjs * (i+4) + objectId] - clusters[numClusters * (i+4) + clusterId]);
+        ans += (objects[numObjs * (i+5) + objectId] - clusters[numClusters * (i+5) + clusterId]) *
+               (objects[numObjs * (i+5) + objectId] - clusters[numClusters * (i+5) + clusterId]);
+    }
+    // boundary condition
+    for (int j = i; j < numCoords; j++) {
+        ans += (objects[numObjs * j + objectId] - clusters[numClusters * j + clusterId]) *
+               (objects[numObjs * j + objectId] - clusters[numClusters * j + clusterId]);
+    }
+
+    return(ans);
+}
 
 
 /*----< find_nearest_cluster() >---------------------------------------------*/
@@ -157,25 +117,24 @@ void find_nearest_cluster_2333(int numCoords,
                           int *intermediates)
 {
     extern __shared__ char sharedMemory[];
-
     unsigned int tid = threadIdx.x;
 
     //  The type chosen for membershipChanged must be large enough to support
     //  reductions! There are blockDim.x elements, one for each thread in the
     //  block.
-//    unsigned char *membershipChanged = (unsigned char *)sharedMemory;
-    float *clusters = (float *)(sharedMemory );//+ blockDim.x);
+    unsigned char *membershipChanged = (unsigned char *)sharedMemory;
+    float *clusters = (float *)(sharedMemory + blockDim.x);
    
-//    membershipChanged[tid] = 0;
+    membershipChanged[tid] = 0;
 
     //  BEWARE: We can overrun our shared memory here if there are too many
     //  clusters or too many coordinates!
 
     // using CUDA unroll
-    #pragma unroll 
+    #pragma unroll 32
     for (int i = tid; i < numClusters; i += blockDim.x) {
         for (int j = 0; j < numCoords; j++) {
-            clusters[(numClusters+1) * j + i] = deviceClusters[numClusters * j + i];
+            clusters[numClusters * j + i] = deviceClusters[numClusters * j + i];
         }
     }
     __syncthreads();
@@ -183,19 +142,19 @@ void find_nearest_cluster_2333(int numCoords,
     int objectId = blockDim.x * blockIdx.x + tid;
 
     if (objectId < numObjs) {
-        int   index;
+        int   index, i, j;
         float dist, min_dist=1e20;
 
         /* find the cluster id that has min distance to object */
         index = 0;
         
-        for (int i=0;i<numClusters;i++){
+        for (i=0;i<numClusters;i++){
             dist = 0;
 #pragma unroll
             for (int j = 0; j < 8; j++)
             {
                 float x = objects[numObjs * j + objectId];
-                float y = clusters[(numClusters+1) * j + i];
+                float y = clusters[numClusters * j + i];
                 dist += (x-y)*(x-y);
             }
             if (dist<min_dist){
@@ -210,14 +169,466 @@ void find_nearest_cluster_2333(int numCoords,
                 atomicAdd(&deviceNewCluster[j*numClusters + index], objects[j*numObjs+objectId]);
         }
         
+        if (membership[objectId] != index) {
+            membershipChanged[tid] = 1;
+        }
+        
         // assign the membership to object objectId 
-        if (membership[objectId] != index) 
-            atomicAdd(&intermediates[0],1);
         membership[objectId] = index;
 
+        __syncthreads();    //  For membershipChanged[]
+
+        if (blockDim.x >= 128) {
+            if (tid < 64) { 
+                membershipChanged[tid] += membershipChanged[tid + 64]; 
+            }    
+            __syncthreads(); 
+        }
+
+        // Unrolling warp
+        if(tid < 32){
+            volatile unsigned char* vmem = membershipChanged;
+            if (blockDim.x >= 64) vmem[tid] += vmem[tid+32];
+            if (blockDim.x >= 32) vmem[tid] += vmem[tid+16];
+            if (blockDim.x >= 16) vmem[tid] += vmem[tid+8];
+            if (blockDim.x >= 8) vmem[tid] += vmem[tid+4];
+            if (blockDim.x >= 4) vmem[tid] += vmem[tid+2];
+            if (blockDim.x >= 2) vmem[tid] += vmem[tid+1];
+        }
+
+        // only first thread in the grid executes this statement
+        if (tid == 0) {
+            intermediates[blockIdx.x] = membershipChanged[0];
+        }
+
+//        int pos = objectId%EXTRA;
+//        atomicAdd(&deviceNewClusterSize[pos*numClusters+index],1);
         atomicAdd(&deviceNewClusterSize[index],1);
+
     }
 }
+
+
+
+
+/*----< find_nearest_cluster() >---------------------------------------------*/
+__global__ static
+void find_nearest_cluster_2(int numCoords,
+                          int numObjs,
+                          int numClusters,
+                          float *objects,           //  [numCoords][numObjs]
+                          float *deviceClusters,    //  [numCoords][numClusters]
+                          int *membership,          //  [numObjs]
+                          int *intermediates)
+{
+    extern __shared__ char sharedMemory[];
+    unsigned int tid = threadIdx.x;
+
+    //  The type chosen for membershipChanged must be large enough to support
+    //  reductions! There are blockDim.x elements, one for each thread in the
+    //  block.
+    unsigned char *membershipChanged = (unsigned char *)sharedMemory;
+    float *clusters = (float *)(sharedMemory + blockDim.x);
+   
+    membershipChanged[tid] = 0;
+
+    //  BEWARE: We can overrun our shared memory here if there are too many
+    //  clusters or too many coordinates!
+
+    // using CUDA unroll
+    #pragma unroll
+    for (int i = tid; i < numClusters; i += blockDim.x) {
+        for (int j = 0; j < numCoords; j++) {
+            clusters[numClusters * j + i] = deviceClusters[numClusters * j + i];
+        }
+    }
+    __syncthreads();
+
+    int objectId = blockDim.x * blockIdx.x + tid;
+
+    if (objectId < numObjs) {
+        int   index, i, j;
+        float dist, min_dist=1e20;
+
+        /* find the cluster id that has min distance to object */
+        index = 0;
+        
+        for (i=0;i<numClusters;i++){
+            dist = 0;
+#pragma unroll 6
+            for (int j = 0; j < numCoords; j++)
+            {
+                float x = objects[numObjs * j + objectId];
+                float y = clusters[numClusters * j + i];
+                dist += (x-y)*(x-y);
+            }
+            if (dist<min_dist){
+                min_dist = dist;
+                index = i;
+            }
+        }
+                
+        if (membership[objectId] != index) {
+            membershipChanged[tid] = 1;
+        }
+        
+        // assign the membership to object objectId 
+        membership[objectId] = index;
+
+        __syncthreads();    //  For membershipChanged[]
+
+        if (blockDim.x >= 128) {
+            if (tid < 64) { 
+                membershipChanged[tid] += membershipChanged[tid + 64]; 
+            }    
+            __syncthreads(); 
+        }
+
+        // Unrolling warp
+        if(tid < 32){
+            volatile unsigned char* vmem = membershipChanged;
+            if (blockDim.x >= 64) vmem[tid] += vmem[tid+32];
+            if (blockDim.x >= 32) vmem[tid] += vmem[tid+16];
+            if (blockDim.x >= 16) vmem[tid] += vmem[tid+8];
+            if (blockDim.x >= 8) vmem[tid] += vmem[tid+4];
+            if (blockDim.x >= 4) vmem[tid] += vmem[tid+2];
+            if (blockDim.x >= 2) vmem[tid] += vmem[tid+1];
+        }
+
+        // only first thread in the grid executes this statement
+        if (tid == 0) {
+            intermediates[blockIdx.x] = membershipChanged[0];
+        }
+
+    }
+}
+
+
+
+
+/*----< find_nearest_cluster() >---------------------------------------------*/
+__global__ static
+void find_nearest_cluster(int numCoords,
+                          int numObjs,
+                          int numClusters,
+                          float *objects,           //  [numCoords][numObjs]
+                          float *deviceClusters,    //  [numCoords][numClusters]
+                          int *membership,          //  [numObjs]
+                          int *intermediates)
+{
+    extern __shared__ char sharedMemory[];
+    unsigned int tid = threadIdx.x;
+
+    //  The type chosen for membershipChanged must be large enough to support
+    //  reductions! There are blockDim.x elements, one for each thread in the
+    //  block.
+    unsigned char *membershipChanged = (unsigned char *)sharedMemory;
+    float *clusters = (float *)(sharedMemory + blockDim.x);
+
+    membershipChanged[tid] = 0;
+
+    //  BEWARE: We can overrun our shared memory here if there are too many
+    //  clusters or too many coordinates!
+
+    // using CUDA unroll
+    #pragma unroll
+    for (int i = tid; i < numClusters; i += blockDim.x) {
+        for (int j = 0; j < numCoords; j++) {
+            clusters[numClusters * j + i] = deviceClusters[numClusters * j + i];
+        }
+    }
+    __syncthreads();
+
+    int objectId = blockDim.x * blockIdx.x + tid;
+
+    if (objectId < numObjs) {
+        int   index, i;
+        float dist, min_dist;
+
+        /* find the cluster id that has min distance to object */
+        index    = 0;
+        min_dist = euclid_dist_2(numCoords, numObjs, numClusters,
+                                 objects, clusters, objectId, 0);
+
+        for (i=1; i<numClusters; i++) {
+            dist = euclid_dist_2(numCoords, numObjs, numClusters,
+                                 objects, clusters, objectId, i);
+            /* no need square root */
+            if (dist < min_dist) { /* find the min and its array index */
+                min_dist = dist;
+                index    = i;
+            }
+        }
+
+        if (membership[objectId] != index) {
+            membershipChanged[tid] = 1;
+        }
+
+        /* assign the membership to object objectId */
+        membership[objectId] = index;
+
+        __syncthreads();    //  For membershipChanged[]
+
+        //blockDim.x *must* be a power of two!
+        /*for (unsigned int s = blockDim.x / 2; s > 64; s >>= 1) {
+            if (tid < s) {
+                membershipChanged[tid] +=
+                    membershipChanged[tid + s];
+            }
+            __syncthreads();
+        }*/
+
+        // if (blockDim.x >= 1024) {
+        //     if (tid < 512) { 
+        //         membershipChanged[tid] += membershipChanged[tid + 512]; 
+        //     } 
+        //     __syncthreads(); 
+        // }
+        // if (blockDim.x >= 512) {
+        //     if (tid < 256) { 
+        //         membershipChanged[tid] += membershipChanged[tid + 256]; 
+        //     }    
+        //     __syncthreads(); 
+        // }
+        // if (blockDim.x >= 256) {
+        //     if (tid < 128) { 
+        //         membershipChanged[tid] += membershipChanged[tid + 128]; 
+        //     } 
+        //     __syncthreads(); 
+        // }
+        if (blockDim.x >= 128) {
+            if (tid < 64) { 
+                membershipChanged[tid] += membershipChanged[tid + 64]; 
+            }    
+            __syncthreads(); 
+        }
+
+        // Unrolling warp
+        if(tid < 32){
+            volatile unsigned char* vmem = membershipChanged;
+            if (blockDim.x >= 64) vmem[tid] += vmem[tid+32];
+            if (blockDim.x >= 32) vmem[tid] += vmem[tid+16];
+            if (blockDim.x >= 16) vmem[tid] += vmem[tid+8];
+            if (blockDim.x >= 8) vmem[tid] += vmem[tid+4];
+            if (blockDim.x >= 4) vmem[tid] += vmem[tid+2];
+            if (blockDim.x >= 2) vmem[tid] += vmem[tid+1];
+        }
+
+        // only first thread in the grid executes this statement
+        if (tid == 0) {
+            intermediates[blockIdx.x] = membershipChanged[0];
+        }
+    }
+}
+
+__global__ static
+void compute_delta(int *deviceIntermediates,
+                   int numIntermediates,    //  The actual number of intermediates
+                   int numIntermediates2)   //  The next power of two
+{
+    //  The number of elements in this array should be equal to
+    //  numIntermediates2, the number of threads launched. It *must* be a power
+    //  of two!
+    extern __shared__ unsigned int intermediates[];
+
+    unsigned int tid = threadIdx.x;
+
+    //  Copy global intermediate values into shared memory.
+    intermediates[tid] =
+        (tid < numIntermediates) ? deviceIntermediates[tid] : 0;
+
+    __syncthreads();
+
+    //  numIntermediates2 *must* be a power of two!
+    for (unsigned int s = numIntermediates2 / 2; s > 32; s >>= 1) {
+        if (tid < s) {
+            intermediates[tid] += intermediates[tid + s];
+        }
+        __syncthreads();
+    }
+
+    // for (unsigned int s = numIntermediates2 / 2; s > 32; s >>= 1) {
+    //     if (tid < s) {
+    //         intermediates[tid] += intermediates[tid + s];
+    //     }
+    //     __syncthreads();
+    // }
+
+     // Unrolling warp
+    if (tid < 32){
+        volatile unsigned int* vmem = intermediates;
+        if (blockDim.x >= 64) vmem[tid] += vmem[tid+32];
+        if (blockDim.x >= 32) vmem[tid] += vmem[tid+16];
+        if (blockDim.x >= 16) vmem[tid] += vmem[tid+8];
+        if (blockDim.x >= 8) vmem[tid] += vmem[tid+4];
+        if (blockDim.x >= 4) vmem[tid] += vmem[tid+2];
+        if (blockDim.x >= 2) vmem[tid] += vmem[tid+1];
+    }
+
+    if (tid == 0) {
+        deviceIntermediates[0] = intermediates[0];
+    }
+}
+
+__global__ static
+void compute_delta2(int *deviceIntermediates,
+                   int numIntermediates,    //  The actual number of intermediates
+                   int numIntermediates2)   //  The next power of two
+{
+    // numIntermediates is 3817
+
+    // limit is shared memory size
+    int limit = BLOCKSIZE2;
+    unsigned int tid = threadIdx.x;
+    /*
+    while ((tid + limit) < numIntermediates) {
+        deviceIntermediates[tid] += deviceIntermediates[tid + limit];
+        limit += BLOCKSIZE2;
+    }*/
+    //printf("%d", numIntermediates);
+
+    // If BLOCKSIZE2 == 1024, HARD CODE HERE
+    deviceIntermediates[tid] += deviceIntermediates[tid + 1024]; 
+    deviceIntermediates[tid] += deviceIntermediates[tid + 2048];
+    if(tid + 3072 < numIntermediates){
+        deviceIntermediates[tid] += deviceIntermediates[tid + 3072];
+    }
+
+    //  The number of elements in this array should be equal to
+    //  numIntermediates2, the number of threads launched. It *must* be a power
+    //  of two!
+    extern __shared__ unsigned int intermediates[];
+
+    //  Copy global intermediate values into shared memory.
+    intermediates[tid] = deviceIntermediates[tid];
+
+    __syncthreads();
+
+    //  numIntermediates2 *must* be a power of two!
+    // for (unsigned int s = numIntermediates2 / 2; s > 32; s >>= 1) {
+    //     if (tid < s) {
+    //         intermediates[tid] += intermediates[tid + s];
+    //     }
+    //     __syncthreads();
+    // }
+
+    // try complete unrolling
+    // Since we know numIntermediates2==1024, no need for judgments
+    //if (numIntermediates2 >= 1024) {
+        if (tid < 512) { 
+            intermediates[tid] += intermediates[tid + 512]; 
+        } 
+        __syncthreads(); 
+    //}
+    //if (numIntermediates2 >= 512) {
+        if (tid < 256) { 
+            intermediates[tid] += intermediates[tid + 256]; 
+        } 
+        __syncthreads(); 
+    //}
+    //if (numIntermediates2 >= 256) {
+        if (tid < 128) { 
+            intermediates[tid] += intermediates[tid + 128]; 
+        } 
+        __syncthreads(); 
+    //}
+    //if (numIntermediates2 >= 128) {
+        if (tid < 64) { 
+            intermediates[tid] += intermediates[tid + 64]; 
+        } 
+        __syncthreads(); 
+    //}
+
+     // Unrolling warp
+    if (tid < 32){
+        volatile unsigned int* vmem = intermediates;
+        vmem[tid] += vmem[tid+32];
+        vmem[tid] += vmem[tid+16];
+        vmem[tid] += vmem[tid+8];
+        vmem[tid] += vmem[tid+4];
+        vmem[tid] += vmem[tid+2];
+        vmem[tid] += vmem[tid+1];
+    }
+
+    if (tid == 0) {
+        deviceIntermediates[0] = intermediates[0];
+    }
+    
+    // for (unsigned int s = 1; s < numIntermediates; s++) 
+    //     deviceIntermediates[0]+=deviceIntermediates[s];
+    
+}
+
+__global__ static
+void compute_delta3(int *deviceIntermediates,
+                   int numIntermediates,    //  The actual number of intermediates
+                   int numIntermediates2)   //  The next power of two
+{
+    // limit is shared memory size
+    int limit = BLOCKSIZE2;
+    unsigned int tid = threadIdx.x;
+    // divergence at the end!!!!!
+    while ((tid + limit) < numIntermediates) {
+        deviceIntermediates[tid] += deviceIntermediates[tid + limit];
+        limit += BLOCKSIZE2;
+    }
+    //  The number of elements in this array should be equal to
+    //  numIntermediates2, the number of threads launched. It *must* be a power
+    //  of two!
+    extern __shared__ unsigned int intermediates[];
+
+    //  Copy global intermediate values into shared memory.
+    intermediates[tid] = deviceIntermediates[tid];
+
+    __syncthreads();
+
+    //numIntermediates2 *must* be a power of two!
+    for (unsigned int s = numIntermediates2 / 2; s > 0; s >>= 1) {
+        if (tid < s) {
+            intermediates[tid] += intermediates[tid + s];
+        }
+        __syncthreads();
+    }
+        if (tid == 0) {
+        deviceIntermediates[0] = intermediates[0];
+    }
+   
+    
+}
+
+__global__ static
+void sum_object(int *deviceMembership,
+                float *deviceObjects,   // [numCoords][numObjs]
+                int *deviceNewClusterSize, //[numClusters]
+                float *deviceNewCluster,//  [numCoords][numClusters]
+                float *deviceCusters,   //  [numCoords][numClusters]
+                int numObjs,
+                int numCoords,
+                int numClusters   )
+{
+/*        
+            for (i=0; i<numClusters; i++) {
+                for (j=0; j<numCoords; j++) {
+                    if (newClusterSize[i] > 0)
+                        dimClusters[j][i] = newClusters[j][i] / newClusterSize[i];
+                    newClusters[j][i] = 0.0;
+                }
+                newClusterSize[i] = 0;  
+            }
+
+            checkCuda(cudaMemcpy(deviceClusters, dimClusters[0],
+                      numClusters*numCoords*sizeof(float), cudaMemcpyHostToDevice));
+*/
+    for (int i=0; i<numClusters; i++) {
+        for (int j=0; j<numCoords; j++) {
+            if (deviceNewClusterSize[i] > 0)
+                deviceCusters[j*numClusters+i] =deviceNewCluster[j*numClusters + i] / deviceNewClusterSize[i];
+            deviceNewCluster[j*numClusters + i] = 0.0;
+        }
+        deviceNewClusterSize[i] = 0;  
+    }
+}
+
 
 /*----< cuda_kmeans() >-------------------------------------------------------*/
 //
@@ -295,13 +706,13 @@ float** cuda_kmeans(float **objects,      /* in: [numObjs][numCoords] */
     const unsigned int numClusterBlocks =
         (numObjs + numThreadsPerClusterBlock - 1) / numThreadsPerClusterBlock;
     const unsigned int clusterBlockSharedDataSize =
-//        numThreadsPerClusterBlock * sizeof(unsigned char) +
-        (numClusters+2) * numCoords * sizeof(float);
+        numThreadsPerClusterBlock * sizeof(unsigned char) +
+        numClusters * numCoords * sizeof(float);
 
-    const unsigned int numReductionThreads = 1;
-//        nextPowerOfTwo(numClusterBlocks);
-//    const unsigned int reductionBlockSharedDataSize =
-//        numReductionThreads * sizeof(unsigned int);
+    const unsigned int numReductionThreads =
+        nextPowerOfTwo(numClusterBlocks);
+    const unsigned int reductionBlockSharedDataSize =
+        numReductionThreads * sizeof(unsigned int);
 
     checkCuda(cudaMalloc(&deviceObjects, numObjs*numCoords*sizeof(float)));
     checkCuda(cudaMalloc(&deviceClusters, numClusters*numCoords*sizeof(float)));
@@ -333,14 +744,14 @@ float** cuda_kmeans(float **objects,      /* in: [numObjs][numCoords] */
 #endif
         if (numCoords == 8)
             find_nearest_cluster_2333
-            <<< numClusterBlocks, numThreadsPerClusterBlock, clusterBlockSharedDataSize>>>
+            <<< numClusterBlocks, numThreadsPerClusterBlock, clusterBlockSharedDataSize >>>
             (numCoords, numObjs, numClusters,
              deviceObjects, deviceClusters, deviceNewCluster, deviceNewClusterSize, deviceMembership, deviceIntermediates);
         else
             find_nearest_cluster_2
             <<< numClusterBlocks, numThreadsPerClusterBlock, clusterBlockSharedDataSize >>>
             (numCoords, numObjs, numClusters,
-             deviceObjects, deviceClusters, deviceNewCluster, deviceNewClusterSize, deviceMembership, deviceIntermediates);
+             deviceObjects, deviceClusters, deviceMembership, deviceIntermediates);
 
         cudaThreadSynchronize(); checkLastCudaError();
 #ifdef OUTPUT_TIME
@@ -351,12 +762,37 @@ float** cuda_kmeans(float **objects,      /* in: [numObjs][numCoords] */
     gettimeofday(&tval_before, NULL);
 #endif
 
+
+        if (numReductionThreads==4096) {
+            // rewrite the kernel dimenstion for reduction
+            //blockDim must equal limit in compute_delta2!
+            dim3 blockDim = BLOCKSIZE2;
+            dim3 gridDim = numClusterBlocks/blockDim.x + 1;
+            compute_delta2 <<< gridDim, blockDim, BLOCKSIZE2 * sizeof(unsigned int) >>>
+                (deviceIntermediates, numClusterBlocks, BLOCKSIZE2);
+           //compute_delta2 <<< 1,  numReductionThreads/4, reductionBlockSharedDataSize >>>
+              //  (deviceIntermediates, numClusterBlocks, numReductionThreads/4);
+            }
+        else if (numReductionThreads < 1024) {
+            dim3 blockDim = numReductionThreads;
+            dim3 gridDim = numClusterBlocks/blockDim.x + 1;
+            compute_delta <<< gridDim, blockDim, reductionBlockSharedDataSize >>>
+                (deviceIntermediates, numClusterBlocks, numReductionThreads);
+            }
+        else{
+            dim3 blockDim = BLOCKSIZE2;
+            dim3 gridDim = numClusterBlocks/blockDim.x + 1;
+            compute_delta3 <<< gridDim, blockDim, BLOCKSIZE2 * sizeof(unsigned int) >>>
+                (deviceIntermediates, numClusterBlocks, BLOCKSIZE2);
+        }
+
+        cudaThreadSynchronize(); checkLastCudaError();
+ 
         int d;
         checkCuda(cudaMemcpy(&d, deviceIntermediates,
                   sizeof(int), cudaMemcpyDeviceToHost));
         delta = (float)d;
 
-        checkCuda(cudaMemset(deviceIntermediates,0, numReductionThreads*sizeof(unsigned int)));
 
 #ifdef OUTPUT_TIME        
     gettimeofday(&tval_after, NULL);
@@ -365,29 +801,70 @@ float** cuda_kmeans(float **objects,      /* in: [numObjs][numCoords] */
     
     gettimeofday(&tval_before, NULL);
 #endif
+        if (numCoords != NUMBER){
+            checkCuda(cudaMemcpy(membership, deviceMembership,
+                      numObjs*sizeof(int), cudaMemcpyDeviceToHost));
         
-        checkCuda(cudaMemcpy(newClusters[0], deviceNewCluster,
-                numClusters*numCoords*sizeof(float), cudaMemcpyDeviceToHost));
-        checkCuda(cudaMemcpy(newClusterSize,deviceNewClusterSize,
-                    EXTRA*numClusters * sizeof(int), cudaMemcpyDeviceToHost ));
-        
-#ifdef OUTPUT_RESULT
-        printf("Membership:\n");
-#endif
-        for (i=0; i<numClusters; i++) {
-#ifdef OUTPUT_RESULT
-            printf("%d ",newClusterSize[i]);
-#endif
-            for (j=0; j<numCoords; j++) {
-//                int sum = 0;
-//                for (int tt=0;tt<EXTRA;tt++)
-//                    sum+=newClusterSize[tt*numClusters+i];
-                if (newClusterSize[i] > 0)
-                    dimClusters[j][i] = newClusters[j][i] / newClusterSize[i];
-                newClusters[j][i] = 0.0;
+            for (i=0; i<numObjs; i++) {
+                index = membership[i];
+
+                newClusterSize[index]++;
+                for (j=0; j<numCoords; j++){
+                    newClusters[j][index] += objects[i][j];
+                }
             }
-            newClusterSize[i] = 0;  
-        }
+        
+            for (i=0; i<numClusters; i++) {
+                for (j=0; j<numCoords; j++) {
+                    if (newClusterSize[i] > 0)
+                        dimClusters[j][i] = newClusters[j][i] / newClusterSize[i];
+                    newClusters[j][i] = 0.0;
+                }
+                newClusterSize[i] = 0;  
+            }
+
+            checkCuda(cudaMemcpy(deviceClusters, dimClusters[0],
+                      numClusters*numCoords*sizeof(float), cudaMemcpyHostToDevice));
+        } else {
+
+  /*      
+            checkCuda(cudaMemcpy(membership, deviceMembership,
+               numObjs*sizeof(int), cudaMemcpyDeviceToHost));
+        
+            for (i=0; i<numObjs; i++) {
+                index = membership[i];
+
+                newClusterSize[index]++;
+                for (j=0; j<numCoords; j++){
+                    newClusters[j][index] += objects[i][j];
+                }
+            }
+    
+*/
+
+            cudaThreadSynchronize(); checkLastCudaError();            
+            checkCuda(cudaMemcpy(newClusters[0], deviceNewCluster,
+                        numClusters*numCoords*sizeof(float), cudaMemcpyDeviceToHost));
+            checkCuda(cudaMemcpy(newClusterSize,deviceNewClusterSize,
+                        EXTRA*numClusters * sizeof(int), cudaMemcpyDeviceToHost ));
+        
+#ifdef OUTPUT_RESULT
+            printf("Membership:\n");
+#endif
+            for (i=0; i<numClusters; i++) {
+#ifdef OUTPUT_RESULT
+                printf("%d ",newClusterSize[i]);
+#endif
+                for (j=0; j<numCoords; j++) {
+//                    int sum = 0;
+//                    for (int tt=0;tt<EXTRA;tt++)
+//                        sum+=newClusterSize[tt*numClusters+i];
+                    if (newClusterSize[i] > 0)
+                        dimClusters[j][i] = newClusters[j][i] / newClusterSize[i];
+                    newClusters[j][i] = 0.0;
+                }
+                newClusterSize[i] = 0;  
+            }
 
 #ifdef OUTPUT_RESULT
             printf("\nClusters:\n");
@@ -397,13 +874,13 @@ float** cuda_kmeans(float **objects,      /* in: [numObjs][numCoords] */
                 printf("\n");
             }
 #endif
-        checkCuda(cudaMemcpy(deviceClusters, dimClusters[0],
-                  numClusters*numCoords*sizeof(float), cudaMemcpyHostToDevice));
+            checkCuda(cudaMemcpy(deviceClusters, dimClusters[0],
+                      numClusters*numCoords*sizeof(float), cudaMemcpyHostToDevice));
 
 
-        checkCuda(cudaMemset(deviceNewCluster, 0, numClusters*numCoords*sizeof(float)));
-        checkCuda(cudaMemset(deviceNewClusterSize, 0, EXTRA*numClusters * sizeof(int)));
-        
+            checkCuda(cudaMemset(deviceNewCluster, 0, numClusters*numCoords*sizeof(float)));
+            checkCuda(cudaMemset(deviceNewClusterSize, 0, EXTRA*numClusters * sizeof(int)));
+        }
 #ifdef OUTPUT_TIME        
     gettimeofday(&tval_after, NULL);
     timersub(&tval_after, &tval_before, &tval_result);
@@ -493,5 +970,6 @@ float** cuda_kmeans(float **objects,      /* in: [numObjs][numCoords] */
 
     return clusters;
 }
+
 
 
