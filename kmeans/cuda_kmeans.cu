@@ -98,7 +98,7 @@ void find_nearest_cluster_2(int numCoords,
     #pragma unroll 
     for (int i = tid; i < numClusters; i += blockDim.x) {
         for (int j = 0; j < numCoords; j++) {
-            clusters[numClusters * j + i] = deviceClusters[numClusters * j + i];
+            clusters[(numClusters+1) * j + i] = deviceClusters[numClusters * j + i];
         }
     }
     __syncthreads();
@@ -118,7 +118,7 @@ void find_nearest_cluster_2(int numCoords,
             for (int j = 0; j < numCoords; j++)
             {
                 float x = objects[numObjs * j + objectId];
-                float y = clusters[numClusters * j + i];
+                float y = clusters[(numClusters+1) * j + i];
                 dist += (x-y)*(x-y);
             }
             if (dist<min_dist){
@@ -175,7 +175,7 @@ void find_nearest_cluster_2333(int numCoords,
     #pragma unroll 
     for (int i = tid; i < numClusters; i += blockDim.x) {
         for (int j = 0; j < numCoords; j++) {
-            clusters[numClusters * j + i] = deviceClusters[numClusters * j + i];
+            clusters[(numClusters+1) * j + i] = deviceClusters[numClusters * j + i];
         }
     }
     __syncthreads();
@@ -195,7 +195,7 @@ void find_nearest_cluster_2333(int numCoords,
             for (int j = 0; j < 8; j++)
             {
                 float x = objects[numObjs * j + objectId];
-                float y = clusters[numClusters * j + i];
+                float y = clusters[(numClusters+1) * j + i];
                 dist += (x-y)*(x-y);
             }
             if (dist<min_dist){
@@ -296,7 +296,7 @@ float** cuda_kmeans(float **objects,      /* in: [numObjs][numCoords] */
         (numObjs + numThreadsPerClusterBlock - 1) / numThreadsPerClusterBlock;
     const unsigned int clusterBlockSharedDataSize =
 //        numThreadsPerClusterBlock * sizeof(unsigned char) +
-        numClusters * numCoords * sizeof(float);
+        (numClusters+1) * numCoords * sizeof(float);
 
     const unsigned int numReductionThreads = 1;
 //        nextPowerOfTwo(numClusterBlocks);
