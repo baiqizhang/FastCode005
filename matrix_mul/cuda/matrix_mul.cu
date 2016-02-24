@@ -319,6 +319,62 @@ __device__ void saxpy( float a, float *b, float *c )
     c[31] += a*b[31];
 }
 
+__global__ void matrixMultiply_1000_3( const float *A, const float *B, float* C, int dim )
+{
+    const int inx = threadIdx.x;
+    const int iny = threadIdx.y;
+    const int ibx = blockIdx.x * STEP * GROUP;
+    const int iby = blockIdx.y * STEP;
+    const int id = inx + iny * STEP;
+​
+    A += ibx + id;
+    B += inx + ( iby + iny) * dim ;
+    C += ibx + id  + ( iby * dim );
+    
+    if (ibx+id>=1000)
+        return;
+​
+    float c[STEP] = {0};
+​
+    __shared__ float bs[STEP][STEP + 1];
+    //do
+#pragma unroll
+    for (int t=0;t<32;t++)
+    {
+#pragma unroll
+        for( int i = 0; i < STEP; i += GROUP ){
+            if ((t==31 && inx>=8) || (iby+iny+i>=1000))
+                bs[inx][iny+i] = 0;
+            else
+                bs[inx][iny+i]  = B[i*dim];
+        }
+​
+​
+        __syncthreads();
+​
+#pragma unroll
+        for( int i = 0; i < STEP; i++, A += dim ){
+            if (t*STEP+i<1000)
+                saxpy( A[0], &bs[i][0], c ); 
+            //printf("\n%f*%f\n",A[0],bs[i][0]);
+        }
+        B += STEP;
+​
+        
+        __syncthreads();
+    } //while( B < Blast );
+​
+​
+​
+    if (blockIdx.y == 31){
+        for( int i = 0; i < 8; i++, C += dim )
+            C[0] = c[i]; 
+    } else{
+        for( int i = 0; i < STEP; i++, C += dim )
+            C[0] = c[i]; 
+    }
+}
+
  __global__ void matrixMultiply_1024_2( const float *A, const float *B, float* C, int dim )
 {
     const int inx = threadIdx.x;
@@ -419,6 +475,7 @@ __device__ void saxpy( float a, float *b, float *c )
         matrixMultiply_1024_2<<<grid, threads>>>( sq_matrix_2_d, sq_matrix_1_d, sq_matrix_result_d, sq_dimension);
     }else if (sq_dimension == 1000){
       // matrixMultiply_1000_2<<<dimGrid, dimBlock>>>(sq_matrix_1_d, sq_matrix_2_d, sq_matrix_result_d, sq_dimension);
+      dimGrid = 
       matrixMultiply_1000_2<<<dimGrid, dimBlock>>>(sq_matrix_1_d, sq_matrix_2_d, sq_matrix_result_d, sq_dimension);
     }else{
       matrixMultiply<<<dimGrid, dimBlock>>>(sq_matrix_1_d, sq_matrix_2_d, sq_matrix_result_d, sq_dimension);
