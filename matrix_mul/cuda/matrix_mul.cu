@@ -471,6 +471,8 @@ __global__ void matrixMultiply_1000_3( const float *A, const float *B, float* C,
         matrixMultiply_1024_2<<<grid, threads>>>( sq_matrix_2_d, sq_matrix_1_d, sq_matrix_result_d, sq_dimension);
     }else if (sq_dimension == 1000){
       // matrixMultiply_1000_2<<<dimGrid, dimBlock>>>(sq_matrix_1_d, sq_matrix_2_d, sq_matrix_result_d, sq_dimension);
+      dim3 dimGrid(sq_dimension/STEP/GROUP, sq_dimension/STEP);
+      dim3 dimBlock(STEP, GROUP);
       matrixMultiply_1000_3<<<dimGrid, dimBlock>>>(sq_matrix_1_d, sq_matrix_2_d, sq_matrix_result_d, sq_dimension);
     }else{
       matrixMultiply<<<dimGrid, dimBlock>>>(sq_matrix_1_d, sq_matrix_2_d, sq_matrix_result_d, sq_dimension);
