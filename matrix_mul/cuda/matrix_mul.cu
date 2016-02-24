@@ -27,234 +27,6 @@
 
 namespace cuda
 {
-  __global__ void matrixMultiply_1000(float * A, float * B, float * C, int d){
-    __shared__ float A_tile[2][TILE_WIDTH][TILE_WIDTH];
-    __shared__ float B_tile[2][TILE_WIDTH][TILE_WIDTH];
-    int row = (blockIdx.y<<TILE_WIDTH_SHIFT) + threadIdx.y, col = (blockIdx.x<<TILE_WIDTH_SHIFT) + threadIdx.x;
-    float sum = 0;
-    
-    #pragma unroll
-    for (int m = 0; m < 30; m+=2) {
-      A_tile[0][threadIdx.y][threadIdx.x] = A[row*d + (m<<TILE_WIDTH_SHIFT)+threadIdx.x];
-      B_tile[0][threadIdx.y][threadIdx.x] = B[((m<<TILE_WIDTH_SHIFT)+threadIdx.y)*d+col];
-
-
-      A_tile[1][threadIdx.y][threadIdx.x] = A[row*d + ((m+1)<<TILE_WIDTH_SHIFT)+threadIdx.x];
-      B_tile[1][threadIdx.y][threadIdx.x] = B[(((m+1)<<TILE_WIDTH_SHIFT)+threadIdx.y)*d+col];
-
-      __syncthreads();
-      #pragma unroll
-      for (int k = 0; k < TILE_WIDTH; ++k){
-        sum += A_tile[0][threadIdx.y][k] * B_tile[0][k][threadIdx.x];
-        sum += A_tile[1][threadIdx.y][k] * B_tile[1][k][threadIdx.x];
-      }
-      __syncthreads();
-    }
-    
-    #pragma unroll
-    for (int m = 30; m < 32; m+=2) {
-      if ((m<<TILE_WIDTH_SHIFT)+threadIdx.x < d)
-        A_tile[0][threadIdx.y][threadIdx.x] = A[row*d + (m<<TILE_WIDTH_SHIFT)+threadIdx.x];
-      else
-        A_tile[0][threadIdx.y][threadIdx.x] = 0;
-
-      if ((m<<TILE_WIDTH_SHIFT)+threadIdx.y < d)
-        B_tile[0][threadIdx.y][threadIdx.x] = B[((m<<TILE_WIDTH_SHIFT)+threadIdx.y)*d+col];
-      else
-        B_tile[0][threadIdx.y][threadIdx.x] = 0;
-
-      if (((m+1)<<TILE_WIDTH_SHIFT)+threadIdx.x < d)
-        A_tile[1][threadIdx.y][threadIdx.x] = A[row*d + ((m+1)<<TILE_WIDTH_SHIFT)+threadIdx.x];
-      else
-        A_tile[1][threadIdx.y][threadIdx.x] = 0;
-
-      if (((m+1)<<TILE_WIDTH_SHIFT)+threadIdx.y < d)
-        B_tile[1][threadIdx.y][threadIdx.x] = B[(((m+1)<<TILE_WIDTH_SHIFT)+threadIdx.y)*d+col];
-      else
-        B_tile[1][threadIdx.y][threadIdx.x] = 0;
-
-      __syncthreads();
-      #pragma unroll
-      for (int k = 0; k < TILE_WIDTH; ++k){
-        sum += A_tile[0][threadIdx.y][k] * B_tile[0][k][threadIdx.x];
-        sum += A_tile[1][threadIdx.y][k] * B_tile[1][k][threadIdx.x];
-      }
-      __syncthreads();
-    }
-    if (row < d && col < d)
-      C[row*d + col] = sum;
-  }
-
-  __global__ void matrixMultiply_1000_2(float * A, float * B, float * C, int d){
-    __shared__ float A_tile[2][TILE_WIDTH][TILE_WIDTH];
-    __shared__ float B_tile[2][TILE_WIDTH][TILE_WIDTH];
-    int row = (blockIdx.y<<TILE_WIDTH_SHIFT) + threadIdx.y, col = (blockIdx.x<<TILE_WIDTH_SHIFT) + threadIdx.x;
-    float sum = 0;
-    
-    #pragma unroll
-    for (int m = 0; m < 30; m+=2) {
-      A_tile[0][threadIdx.y][threadIdx.x] = A[row*d + (m<<TILE_WIDTH_SHIFT)+threadIdx.x];
-      B_tile[0][threadIdx.y][threadIdx.x] = B[((m<<TILE_WIDTH_SHIFT)+threadIdx.y)*d+col];
-
-      if (m!=0){
-        #pragma unroll
-        for (int k = 0; k < TILE_WIDTH; ++k){
-          sum += A_tile[1][threadIdx.y][k] * B_tile[1][k][threadIdx.x];
-        }
-      }
-      __syncthreads();
-      
-      #pragma unroll
-      for (int k = 0; k < TILE_WIDTH; ++k){
-        sum += A_tile[0][threadIdx.y][k] * B_tile[0][k][threadIdx.x];
-      }
-      
-      A_tile[1][threadIdx.y][threadIdx.x] = A[row*d + ((m+1)<<TILE_WIDTH_SHIFT)+threadIdx.x];
-      B_tile[1][threadIdx.y][threadIdx.x] = B[(((m+1)<<TILE_WIDTH_SHIFT)+threadIdx.y)*d+col];
-
-      __syncthreads();
-    }
-    
-    #pragma unroll
-    for (int m = 30; m < 32; m+=2) {
-      if ((m<<TILE_WIDTH_SHIFT)+threadIdx.x < d)
-        A_tile[0][threadIdx.y][threadIdx.x] = A[row*d + (m<<TILE_WIDTH_SHIFT)+threadIdx.x];
-      else
-        A_tile[0][threadIdx.y][threadIdx.x] = 0;
-
-      if ((m<<TILE_WIDTH_SHIFT)+threadIdx.y < d)
-        B_tile[0][threadIdx.y][threadIdx.x] = B[((m<<TILE_WIDTH_SHIFT)+threadIdx.y)*d+col];
-      else
-        B_tile[0][threadIdx.y][threadIdx.x] = 0;
-
-      #pragma unroll
-      for (int k = 0; k < TILE_WIDTH; ++k){
-        sum += A_tile[1][threadIdx.y][k] * B_tile[1][k][threadIdx.x];
-      }
-
-      __syncthreads();
-      #pragma unroll
-      for (int k = 0; k < TILE_WIDTH; ++k){
-        sum += A_tile[0][threadIdx.y][k] * B_tile[0][k][threadIdx.x];
-      }
-      if (((m+1)<<TILE_WIDTH_SHIFT)+threadIdx.x < d)
-        A_tile[1][threadIdx.y][threadIdx.x] = A[row*d + ((m+1)<<TILE_WIDTH_SHIFT)+threadIdx.x];
-      else
-        A_tile[1][threadIdx.y][threadIdx.x] = 0;
-
-      if (((m+1)<<TILE_WIDTH_SHIFT)+threadIdx.y < d)
-        B_tile[1][threadIdx.y][threadIdx.x] = B[(((m+1)<<TILE_WIDTH_SHIFT)+threadIdx.y)*d+col];
-      else
-        B_tile[1][threadIdx.y][threadIdx.x] = 0;
-      __syncthreads();
-    }
-    #pragma unroll
-    for (int k = 0; k < TILE_WIDTH; ++k){
-        sum += A_tile[1][threadIdx.y][k] * B_tile[1][k][threadIdx.x];
-    }
-    if (row < d && col < d)
-      C[row*d + col] = sum;
-  }
-
-  __global__ void matrixMultiply_1024(float * A, float * B, float * C, int d){
-    __shared__ float A_tile[2][TILE_WIDTH][TILE_WIDTH];
-    //__shared__ float test[1];
-    __shared__ float B_tile[2][TILE_WIDTH][TILE_WIDTH];
-    int row = (blockIdx.y<<TILE_WIDTH_SHIFT) + threadIdx.y, col = (blockIdx.x<<TILE_WIDTH_SHIFT) + threadIdx.x;
-    float sum = 0; 
-    #pragma unroll
-    for (int m = 0; m < 32; m+=2) {
-      if (m!=0){
-        #pragma unroll
-        for (int k = 0; k < TILE_WIDTH; ++k){
-          sum += A_tile[1][threadIdx.y][k] * B_tile[1][k][threadIdx.x];
-          //sum += A_tile[1][threadIdx.y][k] * B_tile[1][k][threadIdx.x];
-        }
-      }
-      
-      A_tile[0][threadIdx.y][threadIdx.x] = A[row*d + (m<<TILE_WIDTH_SHIFT)+threadIdx.x];
-      B_tile[0][threadIdx.y][threadIdx.x] = //B[col*d + (m<<TILE_WIDTH_SHIFT)+threadIdx.y];
-                                            B[((m<<TILE_WIDTH_SHIFT)+threadIdx.y)*d+col];
-
-      __syncthreads();
-
-      #pragma unroll
-      for (int k = 0; k < TILE_WIDTH; ++k){
-        sum += A_tile[0][threadIdx.y][k] * B_tile[0][k][threadIdx.x];
-        //sum += A_tile[1][threadIdx.y][k] * B_tile[1][k][threadIdx.x];
-      }
-      A_tile[1][threadIdx.y][threadIdx.x] = A[row*d + ((m+1)<<TILE_WIDTH_SHIFT)+threadIdx.x];
-      B_tile[1][threadIdx.y][threadIdx.x] = //B[col*d + ((m+1)<<TILE_WIDTH_SHIFT)+threadIdx.y];
-                                            B[(((m+1)<<TILE_WIDTH_SHIFT)+threadIdx.y)*d+col];
-      __syncthreads();
-    }
-    
-    #pragma unroll
-    for (int k = 0; k < TILE_WIDTH; ++k){
-        sum += A_tile[1][threadIdx.y][k] * B_tile[1][k][threadIdx.x];
-    }
-
-    C[row*d + col] = sum;
-  }
-  
-
-  // Compute C = A * B
-  __global__ void matrixMultiply(float * A, float * B, float * C, int d){
-    __shared__ float A_tile[TILE_WIDTH][TILE_WIDTH];
-    __shared__ float B_tile[TILE_WIDTH][TILE_WIDTH];
-    int row = (blockIdx.y<<TILE_WIDTH_SHIFT) + threadIdx.y, col = (blockIdx.x<<TILE_WIDTH_SHIFT) + threadIdx.x;
-    float sum = 0;
-    
-    #pragma unroll
-    for (int m = 0; m < (d-1)/TILE_WIDTH+1; ++m) {
-      if ((m<<TILE_WIDTH_SHIFT)+threadIdx.x < d)
-        A_tile[threadIdx.y][threadIdx.x] = A[row*d + (m<<TILE_WIDTH_SHIFT)+threadIdx.x];
-      else
-        A_tile[threadIdx.y][threadIdx.x] = 0;
-
-      if ((m<<TILE_WIDTH_SHIFT)+threadIdx.y < d)
-        B_tile[threadIdx.y][threadIdx.x] = B[((m<<TILE_WIDTH_SHIFT)+threadIdx.y)*d+col];
-      else
-        B_tile[threadIdx.y][threadIdx.x] = 0;
-
-      __syncthreads();
-      #pragma unroll
-      for (int k = 0; k < TILE_WIDTH; ++k)
-        sum += A_tile[threadIdx.y][k] * B_tile[k][threadIdx.x];
-      __syncthreads();
-    }
-    if (row < d && col < d)
-      C[row*d + col] = sum;
-  }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-#define STEP 32
-#define GROUP 4
-//thread : (STEP,GROUP)
-
 
 __device__ void saxpy( float a, float *b, float *c )
 {
@@ -292,7 +64,11 @@ __device__ void saxpy( float a, float *b, float *c )
     c[31] += a*b[31];
 }
 
- __global__ void matrixMultiply_1024_2( const float *A, const float *B, float* C, int dim )
+#define STEP 32
+#define GROUP 4
+//thread : (STEP,GROUP)
+
+ __global__ void matrixMultiply_1024( const float *A, const float *B, float* C)
 {
     const int inx = threadIdx.x;
     const int iny = threadIdx.y;
@@ -301,8 +77,8 @@ __device__ void saxpy( float a, float *b, float *c )
     const int id = inx + iny * STEP;
 
     A += ibx + id;
-    B += inx + ( iby + iny) * dim ;
-    C += ibx + id  + ( iby * dim );
+    B += inx + ( iby + iny) * 1024 ;
+    C += ibx + id  + ( iby * 1024 );
     
 //    if (blockIdx.x!=2||blockIdx.y!=3)
 //        return;
@@ -318,27 +94,167 @@ __device__ void saxpy( float a, float *b, float *c )
 #pragma unroll
     for (int t=0;t<1024/STEP;t++)
     {
-#pragma unroll
-        for( int i = 0; i < STEP; i += GROUP )
-            bs[inx][iny+i]  = B[i*dim];
+//#pragma unroll
+        //for( int i = 0; i < STEP; i += GROUP*2 ){
+        //    bs[inx][iny+i]  = B[i*dim];
+        //}
+            bs[inx][iny]  = B[0];
+            bs[inx][iny+GROUP]  = B[(GROUP)*1024];
+            bs[inx][iny+2*GROUP]  = B[(2*GROUP)*1024];
+            bs[inx][iny+3*GROUP]  = B[(3*GROUP)*1024];
+            bs[inx][iny+4*GROUP]  = B[(4*GROUP)*1024];
+            bs[inx][iny+5*GROUP]  = B[(5*GROUP)*1024];
+            bs[inx][iny+6*GROUP]  = B[(6*GROUP)*1024];
+            bs[inx][iny+7*GROUP]  = B[(7*GROUP)*1024];
 
 
         __syncthreads();
 
 #pragma unroll
-        for( int i = 0; i < STEP; i++, A += dim ){
+        for( int i = 0; i < STEP; i++, A += 1024 ){
             saxpy( A[0], &bs[i][0], c ); 
-            //printf("\n%f*%f\n",A[0],bs[i][0]);
         }
+        
         B += STEP;
 
         
         __syncthreads();
     } //while( B < Blast );
 
-    for( int i = 0; i < STEP; i++, C += dim )
+    for( int i = 0; i < STEP; i++, C += 1024 )
         C[0] = c[i]; 
 }	
+
+
+
+ __global__ void matrixMultiply_1000( const float *A, const float *B, float* C)
+{
+    const int inx = threadIdx.x;
+    const int iny = threadIdx.y;
+    const int ibx = blockIdx.x * STEP * GROUP;
+    const int iby = blockIdx.y * STEP;
+    const int id = inx + iny * STEP;
+
+    A += ibx + id;
+    B += inx + ( iby + iny) * 1000 ;
+    C += ibx + id  + ( iby * 1000 );
+    
+    //printf("[%d,%d] ",blockIdx.x,blockIdx.y);
+
+    float c[STEP] = {0};
+
+    __shared__ float bs[STEP][STEP + 1];
+    
+//    if (threadIdx.x==0 && threadIdx.y==0)
+//                printf("ix:%d iy:%d \n",inx,iny);
+    //do
+#pragma unroll
+    for (int t=0;t<(1000-1)/STEP+1;t++)
+    {
+#pragma unroll
+        for( int i = 0; i < STEP; i += GROUP ){
+            if ((t*STEP+inx>=1000) || (iby+iny+i>=1000))
+                bs[inx][iny+i] = 0;
+            else {
+                bs[inx][iny+i] = B[i*1000];
+  //              printf("i:%d ix:%d iy:%d \n",i,inx,iny);
+            }
+        }
+
+
+        __syncthreads();
+
+  if (ibx+id<1000){
+#pragma unroll
+        for( int i = 0; i < STEP; i++, A += 1000 ){
+            if (t*STEP+i<1000) {
+                saxpy( A[0], &bs[i][0], c ); 
+                //printf("i:%d %f * %f,%f\n",i,A[0],bs[i][0],bs[i][1]);
+            }
+        }
+  }
+        B += STEP;
+
+        
+        __syncthreads();
+    } //while( B < Blast );
+
+
+  if (ibx+id<1000){
+    for( int i = 0; i < STEP; i++, C += 1000 )
+        if (iby+i<1000){
+            C[0] = c[i]; 
+            //printf("C[0] = %f ",C[0]);
+        }
+  }
+
+}	
+
+
+
+ __global__ void matrixMultiply( const float *A, const float *B, float* C, int dim )
+{
+    const int inx = threadIdx.x;
+    const int iny = threadIdx.y;
+    const int ibx = blockIdx.x * STEP * GROUP;
+    const int iby = blockIdx.y * STEP;
+    const int id = inx + iny * STEP;
+
+    A += ibx + id;
+    B += inx + ( iby + iny) * dim ;
+    C += ibx + id  + ( iby * dim );
+    
+    //printf("[%d,%d] ",blockIdx.x,blockIdx.y);
+
+    float c[STEP] = {0};
+
+    __shared__ float bs[STEP][STEP + 1];
+    
+//    if (threadIdx.x==0 && threadIdx.y==0)
+//                printf("ix:%d iy:%d \n",inx,iny);
+    //do
+#pragma unroll
+    for (int t=0;t<(dim-1)/STEP+1;t++)
+    {
+#pragma unroll
+        for( int i = 0; i < STEP; i += GROUP ){
+            if ((t*STEP+inx>=dim) || (iby+iny+i>=dim))
+                bs[inx][iny+i] = 0;
+            else {
+                bs[inx][iny+i] = B[i*dim];
+  //              printf("i:%d ix:%d iy:%d \n",i,inx,iny);
+            }
+        }
+
+
+        __syncthreads();
+
+  if (ibx+id<dim){
+#pragma unroll
+        for( int i = 0; i < STEP; i++, A += dim ){
+            if (t*STEP+i<dim) {
+                saxpy( A[0], &bs[i][0], c ); 
+                //printf("i:%d %f * %f,%f\n",i,A[0],bs[i][0],bs[i][1]);
+            }
+        }
+  }
+        B += STEP;
+
+        
+        __syncthreads();
+    } //while( B < Blast );
+
+
+  if (ibx+id<dim){
+    for( int i = 0; i < STEP; i++, C += dim )
+        if (iby+i<dim){
+            C[0] = c[i]; 
+            //printf("C[0] = %f ",C[0]);
+        }
+  }
+
+}	
+
 
 
   void 
@@ -372,29 +288,32 @@ __device__ void saxpy( float a, float *b, float *c )
 #endif
 
     //printf("\n\ndim=%d",sq_dimension);
+    dim3 grid( (sq_dimension-1)/STEP/GROUP+1, (sq_dimension-1)/STEP+1 ), 
+         threads(STEP, GROUP);
     if (sq_dimension==1024){
+        matrixMultiply_1024<<<grid, threads>>>( sq_matrix_2_d, sq_matrix_1_d, sq_matrix_result_d);
+    }else if (sq_dimension == 1000){
+        matrixMultiply_1000<<<grid, threads>>>( sq_matrix_2_d, sq_matrix_1_d, sq_matrix_result_d);
+    } else {
         /*
         printf("\nA = \n");
-        for (int i=0;i<4;i++){
-           for(int j=0;j<4;j++)
-               printf("%f ",sq_matrix_1[i*4+j]);
+        for (int i=0;i<sq_dimension;i++){
+           for(int j=0;j<sq_dimension;j++)
+               printf("%f ",sq_matrix_1[i*sq_dimension+j]);
            printf("\n");
         }
 
         printf("\nB = \n");
-        for (int i=0;i<4;i++){
-           for(int j=0;j<4;j++)
-               printf("%f ",sq_matrix_2[i*4+j]);
+        for (int i=0;i<sq_dimension;i++){
+           for(int j=0;j<sq_dimension;j++)
+               printf("%f ",sq_matrix_2[i*sq_dimension+j]);
            printf("\n");
         }*/
-        dim3 grid( sq_dimension/STEP/GROUP, sq_dimension/STEP ), 
-             threads(STEP, GROUP);
-        matrixMultiply_1024_2<<<grid, threads>>>( sq_matrix_2_d, sq_matrix_1_d, sq_matrix_result_d, sq_dimension);
-    }else if (sq_dimension == 1000){
-      matrixMultiply_1000_2<<<dimGrid, dimBlock>>>(sq_matrix_1_d, sq_matrix_2_d, sq_matrix_result_d, sq_dimension);
-    }else{
-      matrixMultiply<<<dimGrid, dimBlock>>>(sq_matrix_1_d, sq_matrix_2_d, sq_matrix_result_d, sq_dimension);
+      matrixMultiply<<<grid, threads>>>(sq_matrix_2_d, sq_matrix_1_d, sq_matrix_result_d, sq_dimension);
     }
+//    }else{
+//      matrixMultiply<<<dimGrid, dimBlock>>>(sq_matrix_1_d, sq_matrix_2_d, sq_matrix_result_d, sq_dimension);
+//    }
     cudaThreadSynchronize();
 
 #ifdef OUTPUT_TIME
@@ -410,20 +329,22 @@ __device__ void saxpy( float a, float *b, float *c )
     cudaFree(sq_matrix_1_d);
     cudaFree(sq_matrix_2_d);
     cudaFree(sq_matrix_result_d);
-       /* 
-    if (sq_dimension==4){
+       
+    //if (sq_dimension==4){
+    /*
         printf("\nC = \n");
-        for (int i=0;i<4;i++){
-            for(int j=0;j<4;j++){
-                printf("%f:",sq_matrix_result[i*4+j]);
+        for (int i=0;i<sq_dimension;i++){
+            for(int j=0;j<sq_dimension;j++){
+                printf("%f:",sq_matrix_result[i*sq_dimension+j]);
                 float sum = 0;
-                for (int k=0;k<4;k++)
-                    sum+=sq_matrix_1[i*4+k]*sq_matrix_2[k*4+j];
+                for (int k=0;k<sq_dimension;k++)
+                    sum+=sq_matrix_1[i*sq_dimension+k]*sq_matrix_2[k*sq_dimension+j];
                 printf("%f ",sum);
             }
             printf("\n");
         }
-    }*/
+//    }
+*/
   }
 } // namespace cuda
 
