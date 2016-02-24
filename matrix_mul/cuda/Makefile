@@ -2,9 +2,9 @@ PROJ = matrix_mul
 CC = g++
 NVCC = nvcc
 
-CFLAGS = -c -g -o2 -Wall -I/opt/local/include -I$(HOME)/cppunit/include  -fopenmp
+CFLAGS = -c -g -Wall -I/opt/local/include -I$(HOME)/cppunit/include 
 LDFLAGS = -L/opt/local/lib -L$(HOME)/cppunit/lib
-LIBS = -lcppunit -ldl -lgomp
+LIBS = -lcppunit -ldl 
 OBJS = matrix_mul.o tests.o
 
 all: $(PROJ)
