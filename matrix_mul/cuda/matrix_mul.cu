@@ -326,16 +326,16 @@ __global__ void matrixMultiply_1000_3( const float *A, const float *B, float* C,
     const int ibx = blockIdx.x * STEP * GROUP;
     const int iby = blockIdx.y * STEP;
     const int id = inx + iny * STEP;
-​
+
     A += ibx + id;
     B += inx + ( iby + iny) * dim ;
     C += ibx + id  + ( iby * dim );
     
     if (ibx+id>=1000)
         return;
-​
+
     float c[STEP] = {0};
-​
+
     __shared__ float bs[STEP][STEP + 1];
     //do
 #pragma unroll
@@ -348,24 +348,20 @@ __global__ void matrixMultiply_1000_3( const float *A, const float *B, float* C,
             else
                 bs[inx][iny+i]  = B[i*dim];
         }
-​
-​
+
+
         __syncthreads();
-​
-#pragma unroll
+        #pragma unroll
         for( int i = 0; i < STEP; i++, A += dim ){
             if (t*STEP+i<1000)
                 saxpy( A[0], &bs[i][0], c ); 
             //printf("\n%f*%f\n",A[0],bs[i][0]);
         }
         B += STEP;
-​
-        
+
         __syncthreads();
     } //while( B < Blast );
-​
-​
-​
+
     if (blockIdx.y == 31){
         for( int i = 0; i < 8; i++, C += dim )
             C[0] = c[i]; 
