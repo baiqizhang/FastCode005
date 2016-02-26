@@ -28,6 +28,7 @@
 namespace cuda
 {
 
+// sum of ax*y
 __device__ void saxpy( float a, float *b, float *c )
 {
     c[0] += a*b[0];
@@ -68,6 +69,7 @@ __device__ void saxpy( float a, float *b, float *c )
 #define GROUP 4
 //thread : (STEP,GROUP)
 
+//special treatement for n=1024
  __global__ void matrixMultiply_1024( const float *A, const float *B, float* C)
 {
     const int inx = threadIdx.x;
@@ -90,14 +92,11 @@ __device__ void saxpy( float a, float *b, float *c )
     float c[STEP] = {0};
 
     __shared__ float bs[STEP][STEP + 1];
-    //do
+    
 #pragma unroll
     for (int t=0;t<1024/STEP;t++)
     {
-//#pragma unroll
-        //for( int i = 0; i < STEP; i += GROUP*2 ){
-        //    bs[inx][iny+i]  = B[i*dim];
-        //}
+        // copy a block in A to shared memory
             bs[inx][iny]  = B[0];
             bs[inx][iny+GROUP]  = B[(GROUP)*1024];
             bs[inx][iny+2*GROUP]  = B[(2*GROUP)*1024];
@@ -110,6 +109,7 @@ __device__ void saxpy( float a, float *b, float *c )
 
         __syncthreads();
 
+        // calculation based on sub-matrix multiplication rule
 #pragma unroll
         for( int i = 0; i < STEP; i++, A += 1024 ){
             saxpy( A[0], &bs[i][0], c ); 
@@ -119,7 +119,7 @@ __device__ void saxpy( float a, float *b, float *c )
 
         
         __syncthreads();
-    } //while( B < Blast );
+    }
 
     for( int i = 0; i < STEP; i++, C += 1024 )
         C[0] = c[i]; 
@@ -127,6 +127,7 @@ __device__ void saxpy( float a, float *b, float *c )
 
 
 
+//special treatement for n=1000
  __global__ void matrixMultiply_1000( const float *A, const float *B, float* C)
 {
     const int inx = threadIdx.x;
@@ -139,40 +140,37 @@ __device__ void saxpy( float a, float *b, float *c )
     B += inx + ( iby + iny) * 1000 ;
     C += ibx + id  + ( iby * 1000 );
     
-    //printf("[%d,%d] ",blockIdx.x,blockIdx.y);
 
     float c[STEP] = {0};
 
     __shared__ float bs[STEP][STEP + 1];
     
-//    if (threadIdx.x==0 && threadIdx.y==0)
-//                printf("ix:%d iy:%d \n",inx,iny);
-    //do
 #pragma unroll
     for (int t=0;t<(1000-1)/STEP+1;t++)
     {
+        // copy a block in A to shared memory
 #pragma unroll
         for( int i = 0; i < STEP; i += GROUP ){
             if ((t*STEP+inx>=1000) || (iby+iny+i>=1000))
                 bs[inx][iny+i] = 0;
             else {
                 bs[inx][iny+i] = B[i*1000];
-  //              printf("i:%d ix:%d iy:%d \n",i,inx,iny);
             }
         }
 
 
         __syncthreads();
 
-  if (ibx+id<1000){
+        // calculation based on sub-matrix multiplication rule
+        if (ibx+id<1000){
 #pragma unroll
-        for( int i = 0; i < STEP; i++, A += 1000 ){
-            if (t*STEP+i<1000) {
-                saxpy( A[0], &bs[i][0], c ); 
-                //printf("i:%d %f * %f,%f\n",i,A[0],bs[i][0],bs[i][1]);
+            for( int i = 0; i < STEP; i++, A += 1000 ){
+                if (t*STEP+i<1000) {
+                    saxpy( A[0], &bs[i][0], c ); 
+                    //printf("i:%d %f * %f,%f\n",i,A[0],bs[i][0],bs[i][1]);
+                }
             }
         }
-  }
         B += STEP;
 
         
@@ -180,11 +178,11 @@ __device__ void saxpy( float a, float *b, float *c )
     } //while( B < Blast );
 
 
+    //copy temp result to C
   if (ibx+id<1000){
     for( int i = 0; i < STEP; i++, C += 1000 )
         if (iby+i<1000){
             C[0] = c[i]; 
-            //printf("C[0] = %f ",C[0]);
         }
   }
 
@@ -204,31 +202,28 @@ __device__ void saxpy( float a, float *b, float *c )
     B += inx + ( iby + iny) * dim ;
     C += ibx + id  + ( iby * dim );
     
-    //printf("[%d,%d] ",blockIdx.x,blockIdx.y);
 
     float c[STEP] = {0};
 
     __shared__ float bs[STEP][STEP + 1];
     
-//    if (threadIdx.x==0 && threadIdx.y==0)
-//                printf("ix:%d iy:%d \n",inx,iny);
-    //do
 #pragma unroll
     for (int t=0;t<(dim-1)/STEP+1;t++)
     {
+        // copy a block in A to shared memory
 #pragma unroll
         for( int i = 0; i < STEP; i += GROUP ){
             if ((t*STEP+inx>=dim) || (iby+iny+i>=dim))
                 bs[inx][iny+i] = 0;
             else {
                 bs[inx][iny+i] = B[i*dim];
-  //              printf("i:%d ix:%d iy:%d \n",i,inx,iny);
             }
         }
 
 
         __syncthreads();
 
+        // calculation based on sub-matrix multiplication rule
   if (ibx+id<dim){
 #pragma unroll
         for( int i = 0; i < STEP; i++, A += dim ){
@@ -244,12 +239,11 @@ __device__ void saxpy( float a, float *b, float *c )
         __syncthreads();
     } //while( B < Blast );
 
-
+    //copy temp result to C
   if (ibx+id<dim){
     for( int i = 0; i < STEP; i++, C += dim )
         if (iby+i<dim){
             C[0] = c[i]; 
-            //printf("C[0] = %f ",C[0]);
         }
   }
 
