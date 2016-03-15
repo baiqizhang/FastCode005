@@ -21,27 +21,22 @@ public class SimilarityMapper extends Mapper<LongWritable, Text, IntWritable, Te
 	protected void map(LongWritable key, Text value, Context context)
 			throws IOException, InterruptedException {
 		String line = value.toString();
-		String[] hashtag_featureVector = line.split("\\s+", 2);
+		String [] hashtags = line.split("\\|");
 
-		String hashtag = hashtag_featureVector[0];
-		Map<String, Integer> features = parseFeatureVector(hashtag_featureVector[1]);
 
-		Integer similarity = computeInnerProduct(jobFeatures, features);
-		context.write(new IntWritable(similarity), new Text("#job\t" + hashtag));
+
+		String[] hashtag_featureVector = hashtags[0].split("\\s+");
+		String hashtag = hashtag_featureVector[1];
+		Map<String, Integer> features = parseFeatureVector(hashtag_featureVector[2]);
+
+		String[] hashtag_featureVector1 = hashtags[1].split("\\s+");
+		String hashtag1 = hashtag_featureVector1[0];
+		Map<String, Integer> features1 = parseFeatureVector(hashtag_featureVector1[1]);
+
+		Integer similarity = computeInnerProduct(features, features1);
+		context.write(new IntWritable(similarity), new Text(hashtag  + "\t" + hashtag1));
 	}
 
-	/**
-	 * This function is ran before the mapper actually starts processing the
-	 * records, so we can use it to setup the job feature vector.
-	 * 
-	 * Loads the feature vector for hashtag #job into mapper's memory
-	 */
-	@Override
-	protected void setup(Context context) {
-		String jobFeatureVector = context.getConfiguration().get(
-				"jobFeatureVector");
-		jobFeatures = parseFeatureVector(jobFeatureVector);		
-	}
 
 	/**
 	 * De-serialize the feature vector into a map
