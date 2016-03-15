@@ -6,6 +6,8 @@ import mapred.util.SimpleParser;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.io.NullWritable;
 import org.apache.hadoop.io.Text;
+import org.apache.hadoop.mapred.JobConf;
+import org.apache.hadoop.conf.Configured;
 
 public class Driver {
 
@@ -14,14 +16,19 @@ public class Driver {
 
 		String input = parser.get("input");
 		String output = parser.get("output");
+		String n = parser.get("n");
 
-		getJobFeatureVector(input, output);
+		getJobFeatureVector(input, output, n);
 
 	}
 
-	private static void getJobFeatureVector(String input, String output)
+	private static void getJobFeatureVector(String input, String output, String n)
 			throws IOException, ClassNotFoundException, InterruptedException {
-		Optimizedjob job = new Optimizedjob(new Configuration(), input, output,
+
+		Configuration conf = new Configuration();
+		conf.set("gramNum", n);
+
+		Optimizedjob job = new Optimizedjob(conf, input, output,
 				"Compute NGram Count");
 
 		job.setClasses(NgramCountMapper.class, NgramCountReducer.class, null);
