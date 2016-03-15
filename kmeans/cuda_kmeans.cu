@@ -127,24 +127,23 @@ void find_nearest_cluster(int numCoords,
             }
         }
                 
-//        if (numCoords==NUMBER){
+        //use atomic add to calculate new clusters. Phase 1 : sum up
 #pragma unroll
             for (int j=0; j<numCoords; j++)
                 atomicAdd(&deviceNewCluster[j*numClusters + index], objects[j*numObjs+objectId]);
-//        }
         
         // assign the membership to object objectId 
         if (membership[objectId] != index) 
             atomicAdd(&intermediates[0],1);
         membership[objectId] = index;
 
+        //use atomic add to calculate new clusters. Phase 2 : sum up cluster size
         atomicAdd(&deviceNewClusterSize[index],1);
     }
 }
 
 
-
-/*----< find_nearest_cluster() >---------------------------------------------*/
+// special treatement for nCoords = 22
 __global__ static
 void find_nearest_cluster_666(int numCoords,
                           int numObjs,
@@ -204,11 +203,10 @@ void find_nearest_cluster_666(int numCoords,
             }
         }
                 
-//        if (numCoords==NUMBER){
+        //use atomic add to calculate new clusters. Phase 1 : sum up
 #pragma unroll
         for (int j=0; j<numCoords; j++)
             atomicAdd(&deviceNewCluster[j*numClusters + index], objects[j*numObjs+objectId]);
-//        }
         
         // assign the membership to object objectId 
         if (membership[objectId] != index) 
@@ -220,7 +218,7 @@ void find_nearest_cluster_666(int numCoords,
 }
 
 
-/*----< find_nearest_cluster() >---------------------------------------------*/
+// special treatement for nCoords = 8
 __global__ static
 void find_nearest_cluster_2333(int numCoords,
                           int numObjs,
@@ -280,11 +278,10 @@ void find_nearest_cluster_2333(int numCoords,
             }
         }
                 
-//        if (numCoords==NUMBER){
+        //use atomic add to calculate new clusters. Phase 1 : sum up
 #pragma unroll
         for (int j=0; j<numCoords; j++)
             atomicAdd(&deviceNewCluster[j*numClusters + index], objects[j*numObjs+objectId]);
-//        }
         
         // assign the membership to object objectId 
         if (membership[objectId] != index) 
@@ -432,11 +429,10 @@ float** cuda_kmeans(float **objects,      /* in: [numObjs][numCoords] */
     
     gettimeofday(&tval_before, NULL);
 #endif
-
+        // Delta reduction
         int d;
         checkCuda(cudaMemcpy(&d, deviceIntermediates,
                   sizeof(int), cudaMemcpyDeviceToHost));
-//        printf("\nd:%d",d);
         delta = (float)d;
 
         checkCuda(cudaMemset(deviceIntermediates,0, numReductionThreads*sizeof(unsigned int)));
@@ -448,7 +444,9 @@ float** cuda_kmeans(float **objects,      /* in: [numObjs][numCoords] */
     
     gettimeofday(&tval_before, NULL);
 #endif
-//        cudaThreadSynchronize(); checkLastCudaError();
+
+
+        // calculate new clusters, phase 3
         checkCuda(cudaMemcpy(newClusters[0], deviceNewCluster,
                 numClusters*numCoords*sizeof(float), cudaMemcpyDeviceToHost));
         checkCuda(cudaMemcpy(newClusterSize,deviceNewClusterSize,
@@ -462,14 +460,9 @@ float** cuda_kmeans(float **objects,      /* in: [numObjs][numCoords] */
             printf("%d ",newClusterSize[i]);
 #endif
             for (j=0; j<numCoords; j++) {
-//                int sum = 0;
-//                for (int tt=0;tt<EXTRA;tt++)
-//                    sum+=newClusterSize[tt*numClusters+i];
                 if (newClusterSize[i] > 0)
                     dimClusters[j][i] = newClusters[j][i] / newClusterSize[i];
-//                newClusters[j][i] = 0.0;
             }
-//            newClusterSize[i] = 0;  
         }
 
 #ifdef OUTPUT_RESULT
@@ -496,6 +489,7 @@ float** cuda_kmeans(float **objects,      /* in: [numObjs][numCoords] */
     } while (delta > threshold && loop++ < 500);
 
 //======================================================
+            // calculate again to handle float-point errors
             checkCuda(cudaMemcpy(membership, deviceMembership,
                numObjs*sizeof(int), cudaMemcpyDeviceToHost));
         
