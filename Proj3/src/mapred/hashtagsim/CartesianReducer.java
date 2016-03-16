@@ -1,5 +1,6 @@
 package mapred.hashtagsim;
 
+import org.apache.hadoop.io.LongWritable;
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.mapreduce.Reducer;
 
@@ -15,31 +16,12 @@ public class CartesianReducer extends Reducer<Text, Text, Text, Text> {
                           Context context)
             throws IOException, InterruptedException {
 
-        List<String> valueSet = new ArrayList<>();
-        for (Text word : value) {
-//            System.out.println("################################");
-//            System.out.println("################################");
-//            System.out.println(word.toString());
-//            System.out.println("################################");
-//            System.out.println("################################");
-            valueSet.add(word.toString());
+
+        Integer count = 0;
+        for (Text c : value) {
+            count += Integer.parseInt(c.toString());
         }
 
-//        System.out.println("################################");
-//        System.out.println("################################");
-//        System.out.println(valueSet);
-//        System.out.println("################################");
-//        System.out.println("################################");
-
-        for(int i = 0; i < valueSet.size(); i++){
-            for(int j = i+1; j < valueSet.size(); j++){
-                StringBuilder builder = new StringBuilder();
-                builder.append(valueSet.get(i));
-                builder.append("|");
-                builder.append(valueSet.get(j));
-                context.write(new Text("key"), new Text(builder.toString()));
-            }
-        }
-
+        context.write(new Text(count.toString()), new Text(key));
     }
 }

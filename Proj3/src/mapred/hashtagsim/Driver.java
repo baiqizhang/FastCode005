@@ -28,11 +28,11 @@ public class Driver {
 		// Hashtag Mapper/ Reducer
 		getHashtagFeatureVector(input, tmpdir + "/feature_vector");
 
-        generateCartesian(tmpdir + "/feature_vector", tmpdir + "/feature_vector_all");
+        generateCartesian(tmpdir + "/feature_vector", output);
 
 		// Similarity Mapper
-		getHashtagSimilarities(tmpdir + "/feature_vector_all",
-				output);
+		//getHashtagSimilarities(tmpdir + "/feature_vector",
+		//		output);
 	}
 
 	/**
@@ -55,7 +55,9 @@ public class Driver {
 
 		job.setClasses(CartesianMapper.class, CartesianReducer.class, null);
 		job.setMapOutputClasses(Text.class, Text.class);
-		job.setReduceJobs(1);
+		//job.setOutputKeyClass(Text.class);
+		//job.setOutputValueClass(Text.class);
+		//job.setReduceJobs(1);
 
 		job.run();
 	}
@@ -79,30 +81,4 @@ public class Driver {
 		job.run();
 	}
 
-	/**
-	 * When we have feature vector for both #job and all other hashtags, we can
-	 * use them to compute inner products. The problem is how to share the
-	 * feature vector for #job with all the mappers. Here we're using the
-	 * "Configuration" as the sharing mechanism, since the configuration object
-	 * is dispatched to all mappers at the beginning and used to setup the
-	 * mappers.
-	 *
-	 * @param input
-	 * @param output
-	 * @throws IOException
-	 * @throws ClassNotFoundException
-	 * @throws InterruptedException
-	 */
-	private static void getHashtagSimilarities(
-			String input, String output) throws IOException,
-			ClassNotFoundException, InterruptedException {
-		// Share the feature vector of #job to all mappers.
-		Configuration conf = new Configuration();
-		
-		Optimizedjob job = new Optimizedjob(conf, input, output,
-				"Get similarities between #job and all other hashtags");
-		job.setClasses(SimilarityMapper.class, null, null);
-		job.setMapOutputClasses(IntWritable.class, Text.class);
-		job.run();
-	}
 }
