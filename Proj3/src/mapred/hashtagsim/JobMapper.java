@@ -22,12 +22,11 @@ public class JobMapper extends Mapper<LongWritable, Text, Text, Text> {
 		 * words and map out.
 		 */
 		for (String word : words) 
-			if (word.startsWith("#") == true)
+			if (word.equals("#job")) 
 				for (String word2 : words)
-					if (word2.startsWith("#") == false)
-						//context.write(new Text("#job"), new Text(word2));
-                        context.write(new Text(word), new Text(word2));
-
+					if (word2.startsWith("#")==false)
+						context.write(new Text("#job"), new Text(word2));
+		
 		
 	}
 }

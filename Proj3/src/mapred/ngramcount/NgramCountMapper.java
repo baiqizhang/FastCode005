@@ -19,20 +19,19 @@ public class NgramCountMapper extends Mapper<LongWritable, Text, Text, NullWrita
 		String line = value.toString();
 		String[] words = Tokenizer.tokenize(line);
 
-        Configuration conf = context.getConfiguration();
-        int gramNum = Integer.parseInt(conf.get("gramNum"));
-		
-        for (int i = 0; i < words.length - gramNum + 1; i++){
-            StringBuilder result = new StringBuilder();
-            result.append(words[i]);
-			for (int j = i+1; j < i+gramNum; j++){
-                result.append(" ");
-                result.append(words[j]);
-            }
-            context.write(new Text(result.toString()), NullWritable.get());
-        }
+		Configuration conf = context.getConfiguration();
+		int gramNum = Integer.parseInt(conf.get("gramNum"));
 
+		for (int i =0; i < words.length - gramNum + 1; i++) {
+			StringBuilder result = new StringBuilder();
+			result.append(words[i]);
+
+			for (int j = i + 1; j < i + gramNum; j++) {
+				result.append(" ");
+				result.append(words[j]);
+			}
+
+			context.write(new Text(result.toString()), NullWritable.get());
+		}		
 	}
 }
-
-

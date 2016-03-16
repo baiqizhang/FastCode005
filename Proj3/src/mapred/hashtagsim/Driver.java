@@ -2,6 +2,7 @@ package mapred.hashtagsim;
 
 import java.io.IOException;
 import mapred.job.Optimizedjob;
+import mapred.util.FileUtil;
 import mapred.util.SimpleParser;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.io.IntWritable;
@@ -16,21 +17,18 @@ public class Driver {
 		String output = parser.get("output");
 		String tmpdir = parser.get("tmpdir");
 
-		// JobMapper, JobReducer
+		// Don't need job feature vector by itself
 		// getJobFeatureVector(input, tmpdir + "/job_feature_vector");
 
-
 		// String jobFeatureVector = loadJobFeatureVector(tmpdir
-		//		+ "/job_feature_vector");
+		// 		+ "/job_feature_vector");
 
-		//System.out.println("Job feature vector: " + jobFeatureVector);
+		// System.out.println("Job feature vector: " + jobFeatureVector);
 
-		// Hashtag Mapper/ Reducer
 		getHashtagFeatureVector(input, tmpdir + "/feature_vector");
 
-        generateCartesian(tmpdir + "/feature_vector", tmpdir + "/feature_vector_all");
+		generateCartesian(tmpdir + "/feature_vector", tmpdir + "/feature_vector_all");
 
-		// Similarity Mapper
 		getHashtagSimilarities(tmpdir + "/feature_vector_all",
 				output);
 	}
@@ -48,10 +46,22 @@ public class Driver {
 	 * @throws ClassNotFoundException
 	 * @throws InterruptedException
 	 */
-	private static void generateCartesian(String input, String output)
+
+	// private static void getJobFeatureVector(String input, String output)
+	// 		throws IOException, ClassNotFoundException, InterruptedException {
+	// 	Optimizedjob job = new Optimizedjob(new Configuration(), input, output,
+	// 			"Get feature vector for hashtag #Job");
+
+	// 	job.setClasses(JobMapper.class, JobReducer.class, null);
+	// 	job.setMapOutputClasses(Text.class, Text.class);
+	// 	job.setReduceJobs(1);
+
+	// 	job.run();
+	// }
+
+	private static void generateCartesian(String input, String output) 
 			throws IOException, ClassNotFoundException, InterruptedException {
-		Optimizedjob job = new Optimizedjob(new Configuration(), input, output,
-				"Get feature vector for hashtag #Job");
+		Optimizedjob job = new Optimizedjob(new Configuration(), input, output, "Generate cartesian products for all hashtags");
 
 		job.setClasses(CartesianMapper.class, CartesianReducer.class, null);
 		job.setMapOutputClasses(Text.class, Text.class);
@@ -60,7 +70,22 @@ public class Driver {
 		job.run();
 	}
 
+	/**
+	 * Loads the computed word cooccurrence count for hashtag #job from disk.
+	 * 
+	 * @param dir
+	 * @return
+	 * @throws IOException
+	 */
+	// private static String loadJobFeatureVector(String dir) throws IOException {
+	// 	// Since there'll be only 1 reducer that process the key "#job", result
+	// 	// will be saved in the first result file, i.e., part-r-00000
+	// 	String job_featureVector = FileUtil.load(dir + "/part-r-00000");
 
+	// 	// The feature vector looks like "#job word1:count1;word2:count2;..."
+	// 	String featureVector = job_featureVector.split("\\s+", 2)[1];
+	// 	return featureVector;
+	// }
 
 	/**
 	 * Same as getJobFeatureVector, but this one actually computes feature
@@ -86,7 +111,8 @@ public class Driver {
 	 * "Configuration" as the sharing mechanism, since the configuration object
 	 * is dispatched to all mappers at the beginning and used to setup the
 	 * mappers.
-	 *
+	 * 
+	 * @param jobFeatureVector
 	 * @param input
 	 * @param output
 	 * @throws IOException
@@ -96,11 +122,8 @@ public class Driver {
 	private static void getHashtagSimilarities(
 			String input, String output) throws IOException,
 			ClassNotFoundException, InterruptedException {
-		// Share the feature vector of #job to all mappers.
-		Configuration conf = new Configuration();
-		
-		Optimizedjob job = new Optimizedjob(conf, input, output,
-				"Get similarities between #job and all other hashtags");
+		Optimizedjob job = new Optimizedjob(new Configuration(), input, output,
+				"Get similarities between all hashtags");
 		job.setClasses(SimilarityMapper.class, null, null);
 		job.setMapOutputClasses(IntWritable.class, Text.class);
 		job.run();

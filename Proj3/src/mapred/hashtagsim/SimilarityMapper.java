@@ -11,7 +11,7 @@ import org.apache.hadoop.mapreduce.Mapper;
 
 public class SimilarityMapper extends Mapper<LongWritable, Text, IntWritable, Text> {
 
-	Map<String, Integer> jobFeatures = null;
+	// Map<String, Integer> jobFeatures = null;
 
 	/**
 	 * We compute the inner product of feature vector of every hashtag with that
@@ -20,23 +20,36 @@ public class SimilarityMapper extends Mapper<LongWritable, Text, IntWritable, Te
 	@Override
 	protected void map(LongWritable key, Text value, Context context)
 			throws IOException, InterruptedException {
+		// split two hashtag pairs
 		String line = value.toString();
-		String [] hashtags = line.split("\\|");
+		String[] hashtags = line.split("\\|");
 
-
-
+		// first hashtag <key, values>
 		String[] hashtag_featureVector = hashtags[0].split("\\s+");
 		String hashtag = hashtag_featureVector[1];
 		Map<String, Integer> features = parseFeatureVector(hashtag_featureVector[2]);
 
-		String[] hashtag_featureVector1 = hashtags[1].split("\\s+");
-		String hashtag1 = hashtag_featureVector1[0];
-		Map<String, Integer> features1 = parseFeatureVector(hashtag_featureVector1[1]);
+		// second hashtag <key, values>
+		String[] hashtag_featureVector2 = hashtags[1].split("\\s+");
+		String hashtag2 = hashtag_featureVector2[0];
+		Map<String, Integer> features2 = parseFeatureVector(hashtag_featureVector2[1]);
 
-		Integer similarity = computeInnerProduct(features, features1);
-		context.write(new IntWritable(similarity), new Text(hashtag  + "\t" + hashtag1));
+		Integer similarity = computeInnerProduct(features, features2);
+		context.write(new IntWritable(similarity), new Text(hashtag + "\t" + hashtag2));
 	}
 
+	/**
+	 * This function is ran before the mapper actually starts processing the
+	 * records, so we can use it to setup the job feature vector.
+	 * 
+	 * Loads the feature vector for hashtag #job into mapper's memory
+	 */
+	// @Override
+	// protected void setup(Context context) {
+	// 	String jobFeatureVector = context.getConfiguration().get(
+	// 			"jobFeatureVector");
+	// 	jobFeatures = parseFeatureVector(jobFeatureVector);		
+	// }
 
 	/**
 	 * De-serialize the feature vector into a map
