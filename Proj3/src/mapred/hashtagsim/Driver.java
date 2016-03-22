@@ -16,23 +16,11 @@ public class Driver {
 		String output = parser.get("output");
 		String tmpdir = parser.get("tmpdir");
 
-		// JobMapper, JobReducer
-		// getJobFeatureVector(input, tmpdir + "/job_feature_vector");
-
-
-		// String jobFeatureVector = loadJobFeatureVector(tmpdir
-		//		+ "/job_feature_vector");
-
-		//System.out.println("Job feature vector: " + jobFeatureVector);
-
 		// Hashtag Mapper/ Reducer
 		getHashtagFeatureVector(input, tmpdir + "/feature_vector");
 
         generateCartesian(tmpdir + "/feature_vector", output);
 
-		// Similarity Mapper
-		//getHashtagSimilarities(tmpdir + "/feature_vector",
-		//		output);
 	}
 
 	/**
@@ -54,10 +42,11 @@ public class Driver {
 				"Get feature vector for hashtag #Job");
 
 		job.setClasses(CartesianMapper.class, CartesianReducer.class, null);
-		job.setMapOutputClasses(Text.class, Text.class);
+		job.setCombinerClass(Combiner.class);
+		job.setMapOutputClasses(Text.class, IntWritable.class);
 		//job.setOutputKeyClass(Text.class);
 		//job.setOutputValueClass(Text.class);
-		//job.setReduceJobs(1);
+		job.setReduceJobs(8);
 
 		job.run();
 	}

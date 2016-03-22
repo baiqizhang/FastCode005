@@ -1,6 +1,7 @@
 package mapred.hashtagsim;
 
 import mapred.util.*;
+import org.apache.hadoop.io.IntWritable;
 import org.apache.hadoop.io.LongWritable;
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.mapreduce.Mapper;
@@ -14,7 +15,7 @@ import java.util.Map;
 /**
  * Created by LumiG on 3/15/16.
  */
-public class CartesianMapper extends Mapper<LongWritable, Text, Text, Text> {
+public class CartesianMapper extends Mapper<LongWritable, Text, Text, IntWritable> {
 
     @Override
     protected void map(LongWritable key, Text value,
@@ -23,19 +24,20 @@ public class CartesianMapper extends Mapper<LongWritable, Text, Text, Text> {
 
 
         String [] v = value.toString().split("\\s+");
-
-        List<String> hashtag = new ArrayList<>();
-        List<Integer> existance = new ArrayList<>();
-        for (String s: v[1].split(";")){
-                hashtag.add(s.split(":")[0]);
-                existance.add(Integer.parseInt(s.split(":")[1]));
+        String [] v1 = v[1].split(";");
+        int size = v1.length;
+        String[] hashtag = new String[size];
+        Integer[] existance = new Integer[size];
+        for (int i = 0; i < size; i++){
+                hashtag[i] = v1[i].split(":")[0];
+                existance[i] = Integer.parseInt(v1[i].split(":")[1]);
         }
 
-        for (int i = 0; i < hashtag.size(); i++){
-            for (int j = i+1; j < hashtag.size(); j++){
-                String outkey = hashtag.get(i) + "," + hashtag.get(j);
-                Integer outvalue = existance.get(i) * existance.get(j);
-                context.write(new Text(outkey), new Text(outvalue.toString()));
+        for (int i = 0; i < size; i++){
+            for (int j = i+1; j < size; j++){
+                String outkey = hashtag[i] + "\t" + hashtag[j];
+                int outvalue = existance[i] * existance[j];
+                context.write(new Text(outkey), new IntWritable(outvalue));
             }
         }
 
