@@ -11,7 +11,7 @@ testset = torch.load('cifar10-test.t7')
 classes = {'airplane', 'automobile', 'bird', 'cat',
            'deer', 'dog', 'frog', 'horse', 'ship', 'truck'}
 print(trainset)
-print(#trainset.data)
+--print(#trainset.data)
 
 -- ignore setmetatable for now, it is a feature beyond the scope of this tutorial. It sets the index operator.
 setmetatable(trainset, 
@@ -29,11 +29,11 @@ mean = {} -- store the mean, to normalize the test set in the future
 stdv  = {} -- store the standard-deviation for the future
 for i=1,3 do -- over each image channel
     mean[i] = trainset.data[{ {}, {i}, {}, {}  }]:mean() -- mean estimation
-    print('Channel ' .. i .. ', Mean: ' .. mean[i])
+    --print('Channel ' .. i .. ', Mean: ' .. mean[i])
     trainset.data[{ {}, {i}, {}, {}  }]:add(-mean[i]) -- mean subtraction
     
     stdv[i] = trainset.data[{ {}, {i}, {}, {}  }]:std() -- std estimation
-    print('Channel ' .. i .. ', Standard Deviation: ' .. stdv[i])
+    --print('Channel ' .. i .. ', Standard Deviation: ' .. stdv[i])
     trainset.data[{ {}, {i}, {}, {}  }]:div(stdv[i]) -- std scaling
 end
 
@@ -55,7 +55,7 @@ net:add(nn.LogSoftMax())                     -- converts the output to a log-pro
 criterion = nn.ClassNLLCriterion() --Loss function
 trainer = nn.StochasticGradient(net, criterion)
 trainer.learningRate = 0.001
-trainer.maxIteration = 1 -- just do 5 epochs of training.
+trainer.maxIteration = 10 -- just do 5 epochs of training.
 
 timer = torch.Timer()
 trainer:train(trainset)
@@ -75,16 +75,16 @@ for i=1,predicted:size(1) do
     print(classes[i], predicted[i])
 end
 
-correct = 0
-for i=1,10000 do
-    local groundtruth = testset.label[i]
-    local prediction = net:forward(testset.data[i])
-    local confidences, indices = torch.sort(prediction, true)  -- true means sort in descending order
-    if groundtruth == indices[1] then
-        correct = correct + 1
-    end
-end
-print(correct, 100*correct/10000 .. ' % ')
+--correct = 0
+--for i=1,10000 do
+--    local groundtruth = testset.label[i]
+--    local prediction = net:forward(testset.data[i])
+--    local confidences, indices = torch.sort(prediction, true)  -- true means sort in descending order
+--    if groundtruth == indices[1] then
+--       correct = correct + 1
+--    end
+--end
+--print(correct, 100*correct/10000 .. ' % ')
 
 class_performance = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0}
 for i=1,10000 do
